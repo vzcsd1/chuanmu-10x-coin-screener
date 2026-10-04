@@ -1,0 +1,11 @@
+# 行情数据缓存：~208MB、3,800+ 个 parquet 二进制文件，
+# 代码与报告（Grok 阅读所需）不依赖它们入库；需要时可单独传输
+data/
+
+# Python 运行产物
+__pycache__/
+*.py[cod]
+connection-error.log
+
+# AI 助手内部工作记忆（有效结论已沉淀到根目录各报告与 PROJECT_CONTEXT.md）
+.workbuddy-ai/
