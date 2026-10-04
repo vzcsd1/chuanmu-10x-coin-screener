@@ -90,8 +90,8 @@ class Config:
     timeframe: str = "1h"
     lookback: int = 240
     box_period: int = 24
-    min_quote_volume: float = 1_000_000
-    max_symbols: int = 200
+    min_quote_volume: float = 5_000_000
+    max_symbols: int = 50
     volume_multiplier: float = 1.5
     ema_period: int = 50
     atr_period: int = 14
@@ -100,16 +100,17 @@ class Config:
     risk_per_trade: float = 0.01
     max_quote_per_trade: float = 100.0
     poll_seconds: int = 300
-    # 2026-10-04：观察池门槛从 6 降为 4，允许趋势或单日 OI 增长单独入池。
-    # 目标是多次发现多倍行情；只按核心分判定，辅助分仍不参与门槛。
-    # 历史特征复核、机会代价及参数边界见 CANDIDATE_POOL_CHANGE.md。
-    min_score: int = 4
+    # 门槛 6 = 趋势(5) + 至少一项附加条件，**只对核心分（MAX_SCORE=18）判定**，
+    # 不含 extra_score（市值/OKX/合约量等未经回测验证的辅助加分）——否则实盘会
+    # 仅凭"趋势+合约量+OKX"就把 BTC 这类大市值币选出来，与回测口径不符。
+    # 依据 research/09_backtest_revised.py：1,402 个历史样本上 >=6 选出 603 个、
+    # 精确率 72.5%、提升 1.24x、召回 53.2%；而原规则 box_score>=5 召回只有 4.4%。
+    min_score: int = 6
     use_coingecko: bool = True
     timeout_ms: int = 30_000
     proxy: str | None = None
     csv_dir: str | None = None
     require_okx: bool = True
-    require_futures: bool = False
 
 
 def registry_proxy() -> str | None:
@@ -171,8 +172,6 @@ def resolve_proxy() -> str | None:
 
 
 def env_config() -> Config:
-    defaults = Config()
-
     def number(name: str, default: Any, cast):
         raw = os.getenv(name)
         if raw is None or not str(raw).strip():
@@ -187,8 +186,8 @@ def env_config() -> Config:
         timeframe=os.getenv("BINANCE_TIMEFRAME", "1h"),
         lookback=number("LOOKBACK", 240, int),
         box_period=number("BOX_PERIOD", 24, int),
-        min_quote_volume=number("MIN_QUOTE_VOLUME", defaults.min_quote_volume, float),
-        max_symbols=number("MAX_SYMBOLS", defaults.max_symbols, int),
+        min_quote_volume=number("MIN_QUOTE_VOLUME", 5_000_000, float),
+        max_symbols=number("MAX_SYMBOLS", 50, int),
         volume_multiplier=number("VOLUME_MULTIPLIER", 1.5, float),
         ema_period=number("EMA_PERIOD", 50, int),
         atr_period=number("ATR_PERIOD", 14, int),
@@ -197,13 +196,12 @@ def env_config() -> Config:
         risk_per_trade=number("RISK_PER_TRADE", 0.01, float),
         max_quote_per_trade=number("MAX_QUOTE_PER_TRADE", 100, float),
         poll_seconds=number("POLL_SECONDS", 300, int),
-        min_score=number("MIN_SCORE", defaults.min_score, int),
+        min_score=number("MIN_SCORE", 6, int),
         use_coingecko=os.getenv("USE_COINGECKO", "true").lower() == "true",
         timeout_ms=number("REQUEST_TIMEOUT_MS", 30_000, int),
         proxy=resolve_proxy(),
         csv_dir=os.getenv("CSV_DIR") or str(Path(__file__).resolve().parent / "results"),
         require_okx=os.getenv("REQUIRE_OKX", "true").lower() == "true",
-        require_futures=os.getenv("REQUIRE_FUTURES", "false").lower() == "true",
     )
 
 
@@ -538,27 +536,18 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config,
         except Exception as exc:
             logging.warning("CoinGecko market caps unavailable: %s", exc)
     rows: list[dict[str, Any]] = []
-    symbols = select_symbols(tickers, cfg)
-    logging.info("扫描范围 %d 个；观察门槛 %d；%s", len(symbols), cfg.min_score,
-                 "仅含合约标的" if cfg.require_futures else "包含仅现货标的")
-    for index, symbol in enumerate(symbols, 1):
-        if index == 1 or index % 10 == 0 or index == len(symbols):
-            logging.info("扫描进度 %d/%d: %s", index, len(symbols), symbol)
+    for symbol in select_symbols(tickers, cfg):
         try:
-            market = exchange.market(symbol)
-            if market.get("active") is False or not market.get("spot", True):
-                continue
-            base = market["base"]
-            future_symbol = future_by_base.get(base)
-            if cfg.require_futures and not future_symbol:
-                continue
             candles = exchange.fetch_ohlcv(symbol, cfg.timeframe, limit=cfg.lookback)
             df = indicators(candles, cfg)
             if len(df) < cfg.box_period + 3:
                 continue
             score, details = box_score(df, cfg)
-            kline_points = score
             trade_levels = signal(symbol, df, cfg) or {}
+            base = exchange.market(symbol)["base"]
+            future_symbol = future_by_base.get(base)
+            if not future_symbol:
+                continue
             ft = futures_tickers.get(future_symbol, {})
             quote_volume = _as_float(tickers[symbol].get("quoteVolume"))
             futures_volume = _as_float(ft.get("quoteVolume"))
@@ -571,7 +560,7 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config,
             # 就能凑到 7 分过门槛）。因此单独累计到 extra_score，只作展示与人工参考。
             extra_score = 0
             extra_hits: list[str] = []
-            if future_symbol and futures_volume >= quote_volume:
+            if futures_volume >= quote_volume:
                 extra_score += 1
                 extra_hits.append("合约量>=现货量")
             if cap and cap <= 50_000_000:
@@ -583,15 +572,13 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config,
             if volume_cap_ratio and volume_cap_ratio >= 0.60:
                 extra_score += 2
                 extra_hits.append("成交量/市值>=60%")
-            oi_value = None
-            if future_symbol:
-                try:
-                    oi = futures.fetch_open_interest(future_symbol)
-                    oi_value = _as_float(oi.get("openInterestValue"))
-                    if not oi_value:
-                        oi_value = _as_float(oi.get("openInterestAmount")) * _as_float(ft.get("last") or ft.get("close"))
-                except Exception:
-                    logging.debug("open interest unavailable for %s", future_symbol, exc_info=True)
+            try:
+                oi = futures.fetch_open_interest(future_symbol)
+                oi_value = _as_float(oi.get("openInterestValue"))
+                if not oi_value:
+                    oi_value = _as_float(oi.get("openInterestAmount")) * _as_float(ft.get("last") or ft.get("close"))
+            except Exception:
+                oi_value = 0.0
             oi_cap_ratio = oi_value / cap if cap and oi_value else None
             if oi_cap_ratio and oi_cap_ratio >= 0.30:
                 extra_score += 1
@@ -608,15 +595,14 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config,
                 extra_score += 1
                 extra_hits.append("币安+OKX合约")
             funding_rate = None
-            if future_symbol:
-                try:
-                    funding = futures.fetch_funding_rate(future_symbol)
-                    funding_rate = _as_float(funding.get("fundingRate"), default=float("nan"))
-                    # 资金费率仅展示，不计分。
-                except Exception:
-                    logging.debug("funding unavailable for %s", future_symbol, exc_info=True)
+            try:
+                funding = futures.fetch_funding_rate(future_symbol)
+                funding_rate = _as_float(funding.get("fundingRate"), default=float("nan"))
+                # 资金费率 >=0 实测区分度 +3.3pp 且样本外方向翻转 —— 仅展示，不计分
+            except Exception:
+                pass
             # 合约侧：OI 增速 + 大户持仓多空比（实测提升倍数最高的一维）
-            deriv = fetch_deriv_context(futures, future_symbol, cfg) if future_symbol else {}
+            deriv = fetch_deriv_context(futures, future_symbol, cfg)
             deriv_points, deriv_details = deriv_score(
                 deriv.get("oi_chg_1d"), deriv.get("oi_chg_3d"),
                 deriv.get("ls_top"), deriv.get("ls_chg_3d"))
@@ -637,10 +623,6 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config,
             if math.isfinite(percentage) and percentage > 0:
                 extra_hits.append("24h上涨")
             rows.append({"symbol": symbol, "score": score, "max_score": MAX_SCORE,
-                         "score_kline": kline_points,
-                         "score_deriv": deriv_points if future_symbol else None,
-                         "has_futures": bool(future_symbol),
-                         "market_scope": "现货+合约" if future_symbol else "仅现货",
                          "extra_score": extra_score,
                          "conditions_met": len(hit_conditions),
                          "conditions": ",".join(hit_conditions) or "无",
@@ -700,7 +682,6 @@ def render_table(rows: list[dict[str, Any]]) -> str:
     """Format candidates as an aligned table for the launcher console."""
     columns = [
         ("标的", "symbol", "left", lambda r: r["symbol"].replace("/USDT", "")),
-        ("市场范围", "market_scope", "left", lambda r: r.get("market_scope", "-")),
         ("评分", "score", "right", lambda r: f"{r['score']}/{r.get('max_score', MAX_SCORE)}"),
         ("辅助", "extra_score", "right", lambda r: str(r.get("extra_score", 0))),
         ("命中", "conditions_met", "right", lambda r: str(r.get("conditions_met", 0))),
@@ -793,7 +774,7 @@ def main() -> int:
         print("未检测到代理。若币安被墙，请设置 BINANCE_PROXY，例如 http://127.0.0.1:7897")
     print(f"参数: 周期={cfg.timeframe} 箱体={cfg.box_period} 扫描前={cfg.max_symbols} "
           f"门槛={cfg.min_score} 市值源={'CoinGecko' if cfg.use_coingecko else '关闭'}")
-    print("正在拉取行情，扫描期间会输出进度。\n")
+    print("正在拉取行情，约需 30-60 秒...\n")
     try:
         exchange, futures, cfg = connect_exchanges(cfg)
     except Exception as exc:
