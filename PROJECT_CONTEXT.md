@@ -136,6 +136,57 @@ py -3.10 -B run_chuanmu.py
 - **2026-10-04 后续评价新增发现：** 第 07 号逻辑回归在划分训练与测试之前执行 `X.fillna(X.median())`（`research/07_oos_validate.py:145`），训练缺失值因而使用了包含测试期的信息，属于预处理的信息泄漏。本次只读合并为 748 行；全样本与训练期中位数有 14 个特征不同。该发现限定于这个模型评估路径，不等于第 09 号评分全部用了未来标签；其性能影响须修复后重测。
 - 历史扫描 CSV 没有独立的逐行信号时间、策略版本与配置快照；重建决策现场仍缺信息。来源：`binance_box_strategy.py:623`、`:723`。
 
+### 6.7 样本已放宽、“19 / 几个”的出处核对（2026-10-05）
+
+用户质疑：ds4.1f 指出历史样本早已纳入翻倍行情，为何此前评价听起来只剩 19 个币甚至几个？本节是这次数量口径核对的唯一记录。
+
+**核对结论：历史事件库已经从两倍价格行情起收录，ds4.1f 截图中的这点正确。十倍从来不是当前事件库的硬性下限。此前评价反复突出十倍子组，没有同时交代全部多倍事件的覆盖，评价侧重点有偏差；撤回由此引出的“整个项目只研究十倍、总共只剩十几个或几个币”的推论。**
+
+已回查本会话原话：“现有 24 个十倍以上案例，默认门槛选中 9 个；提高门槛后，只剩 4 个、再到 2 个。”其计算限定为十倍以上子组，评分门槛依次是 6、8、10；“默认 6”仅描述当时状态。没有在已检索到的原话中找到“整个项目只有 19 个币”；文件中可复现的 19 是 5 分门槛覆盖的十倍事件数。不能把文件中相同的数字当成另一段未找到原话的确切出处。
+
+依据与分母：
+
+- `research/02_detect_pumps.py:28` 的 `MIN_GAIN=1.0` 表示上涨 100%，即价格两倍；代码同时要求 30 日收盘涨幅达到这个阈值并定位局部峰值，事件标签使用峰日高价/回看低价。因此库中不是所有形式的翻倍行情，也不是从实时信号价出发的交易收益。
+- `data/pumps.json` 有 841 条事件、396 个不同币种，价格倍数中位数 3.0983。`data/features.csv` 的正例也有 841 行。
+- `research/09_backtest_revised.py:53` 按币种、日期、标签去重后，保存评分表有 822 条正例和 580 条对照。少掉的 19 行是被既有去重键合并的记录，不能直接认定为 19 个独立机会消失。
+- 当前在线默认值是 4 分、最多扫描 200 个、最低日成交额 100 万 USDT、合约可选。当前配置与变更依据仍以 [CANDIDATE_POOL_CHANGE.md](CANDIDATE_POOL_CHANGE.md) 为准；历史两倍标签与这次在线扩池是两项不同改变。
+
+固定读取现存 `data/backtest_scores.csv`，下面每格均为**历史正例事件条数**，不是当日候选数或独立币种数：
+
+| 事后价格倍数下限 | 该组事件 / 不同币种 | ≥4分 | ≥5分 | ≥6分 | ≥8分 | ≥10分 |
+|---|---:|---:|---:|---:|---:|---:|
+| 2倍 | 822 / 396 | 698 | 692 | 437 | 142 | 57 |
+| 2.5倍 | 673 / 367 | 560 | 554 | 352 | 127 | 57 |
+| 3倍 | 447 / 295 | 367 | 361 | 246 | 111 | 57 |
+| 5倍 | 118 / 104 | 98 | 95 | 63 | 26 | 12 |
+| 10倍 | 24 / 23 | 20 | 19 | 9 | 4 | 2 |
+
+各行是累计子组，不能相加。4 分在全部历史多倍正例上覆盖 698/822；十倍子组只是其中的 20/24。所有标签均为事后低点到高点，且部分低倍组缺少合约数据；这张表不能决定哪个倍数最赚钱，也不能证明当前线上只会选出多少币。
+
+两份旧扫描 CSV 分别保存 6、8 行排名，按 6 分过滤分别剩 4、1 行；它们没有完整配置快照，不能当成放宽后的新扫描结果。未执行新线上扫描，当前实时结果数未知。
+
+复跑（项目根目录 PowerShell；只读，不联网、不覆盖任何数据）：
+
+```powershell
+@'
+import json
+from pathlib import Path
+import pandas as pd
+p = pd.DataFrame(json.loads(Path('data/pumps.json').read_text(encoding='utf-8')))
+f = pd.read_csv('data/features.csv')
+b = pd.read_csv('data/backtest_scores.csv')
+print('raw_events / symbols / median_multiple:', len(p), p.symbol.nunique(), (p.gain + 1).median())
+print('feature_positives / rows_removed_by_key:', int(f.label.eq(1).sum()), int(f.duplicated(['symbol', 'pre_day', 'label']).sum()))
+print('saved_positive / control:', int(b.label.eq(1).sum()), int(b.label.eq(0).sum()))
+for multiple in [2, 2.5, 3, 5, 10]:
+    sub = b[b.label.eq(1) & b.gain.ge(multiple - 1)]
+    print('multiple / events / symbols / scores_4_5_6_8_10:', multiple, len(sub), sub.symbol.nunique(), [int(sub.score_full.ge(s).sum()) for s in [4, 5, 6, 8, 10]])
+for path in sorted(Path('results').glob('candidates-*.csv')):
+    scan = pd.read_csv(path)
+    print('snapshot / rows / at_score_6:', path.name, len(scan), int(scan.score.ge(6).sum()))
+'@ | py -3.10 -B -
+```
+
 ## 7. 本轮自检与复跑方法
 
 实测通过：15 个非备份 Python 文件的语法解析；Python 3.10 环境导入；本地样本重算；保存分数比较；临界值和缺失值差异复现。未运行写入产物的研究 `main()`，不覆盖数据。
@@ -174,3 +225,81 @@ for values in [(0.10, 0.20, 1.0), (0.15, np.nan, 1.2)]:
 建议下一轮先统一评分判定、缺失值和多空比来源，并固化旧规则基线，再统一启动输出和运行记录。理由是这些问题已有代码证据，且会影响入选结果和研究可复现性。
 
 随后再做逐日全市场验证、冻结规则后的新时期验证和观察池后续表现跟踪。事件数据、催化剂和界面可以继续完善，但目前不宜通过新增权重掩盖上述差异。具体实施范围由下一轮需求决定，本轮没有启动任何这些改造。
+
+## 9. 更新后接续核对（2026-10-05）
+
+用户要求：项目已更新，先阅读。已依次阅读 TODO、DONE、KNOWLEDGE，核对主程序改动、新研究脚本、相关报告与扫描产物。只做离线检查及文档纠错，没有改策略代码、调整参数、启动扫描或覆盖研究产物。本节保存核对细节，知识索引见 KNOWLEDGE.md 第 2.5 节，未完成工作统一进 TODO.md。
+
+### 9.1 当前实现与保存结果
+
+- 当前 Config：min_score=5；成交额范围 500,000–50,000,000 USDT；max_market_cap=2,000,000,000；max_symbols=400；require_futures=False。市值缺失不拦截。它们替代本文前面阅读现场的旧默认值，环境变量仍可覆盖。
+- 新增 research/11_hit_rate_current.py 与 12_optimize_gate.py；08 号脚本新增从本地日线构建市场排名的方法。排名使用本地可读取数据，是否覆盖当时全部市场未由本轮确认。
+- 20261005-134652-843815 扫描 CSV 保存 217 行排名，其中 107 行达到 5 分、78 行达到 6 分。较早的 112232 快照保存 211 行，其中对应 171、121 行。不同时间不能直接归因于参数改变；本轮只核对保存文件，未实时联网。
+- 6 项现有离线测试通过，66 条术语查重通过；主程序、research、tools、tests 下 Python 文件语法解析通过。测试通过不代表策略假设或全部研究口径成立。
+
+### 9.2 新报告的“19 个十倍事件”有另一处来源错误
+
+第 6.7 节解释的是旧评分表的 5 分子组；**本次新报告中的 19 并不是那个口径**。新脚本 `research/11_hit_rate_current.py` 的 load() 使用 `[2,3,5,10,inf]` 直接切分 gain，但从事件检测脚本到 features_audit.csv，gain 均为价格倍数减 1。本次按相同数据键确认，新旧 gain 一致。
+
+| 检查项 | 当前脚本结果 | 按价格倍数解释应得的结果 |
+|---|---:|---:|
+| 822 条正例中被分入涨幅组 | 447 | 822 |
+| 没有分入任何涨幅组 | 375 | 0 |
+| 标为十倍以上的事件 | 19（实际 gain≥10，即价格≥11倍） | 24（gain≥9） |
+| 该组经过现有过滤且达到 5 分 | 15/19 | 17/24 |
+| 该组经过现有过滤且达到 6 分 | 9/19 | 9/24 |
+| 该组通过现有过滤 | 19/19 | 22/24 |
+
+> **2026-10-05 代码已修**：`research/11_hit_rate_current.py` 的 `TIER_BINS` 由 `[2,3,5,10]`
+> 改为 `[1,2,4,9]`（与 `09_backtest_revised.py` 一致）；`02_detect_pumps.py` 的 `TIERS`
+> 标签同步更正。重跑后 10x+ 为 **24** 条、命中 **17** 条，与右列一致；375 条正例不再掉出分档。
+> 相关文档（`REASONING.md`、`CANDIDATE_POOL_CHANGE.md`、`爆拉币命中率与优化空间.md`、`KNOWLEDGE.md`）已同步。
+
+五条未进入新报告十倍组的记录涉及 XNOUSDT、NFPUSDT、SUPERUSDT、STOUSDT、LOOMUSDT；第 9.4 节复跑命令输出各条记录的完整日期、涨幅和身份。
+
+全部事件的 5 分覆盖 616/822、6 分覆盖 395/822 可以复现，不受此次分组错误影响；它们仍是历史事件统计，不是真实交易胜率。历史市值已知行数为 0，因此这些数字没有验证市值上限的历史效果。成交额过滤已参与；按正确十倍定义，存在被过滤的事件，不能继续引用“十倍零漏报”。
+
+### 9.3 不能当成完成成果的说明
+
+- 在线 deriv_score 使用 >= 并逐项处理缺失，新 11 号脚本使用 >，三个字段不全则整组不计分。同一批输入仍有 3 条合约分不同。共享 WEIGHTS 没有消除这些差异。
+- 07 号脚本仍在训练/测试划分前填补全体样本中位数。不能由 08 号局部排名修正推导“整个项目无前视问题”。已有测试期又被用来比较阈值，两个指标一起变好也不能证明没有过拟合。
+- 新测试 test_min_score_is_a_deliberate_choice_not_a_math_floor 固定了 min_score≥5 的约束；这是策略选择，不是程序正确性的必然条件。5 分不强制趋势成立，合约分组合也可以达到；4 分可由单日 OI 项独立达到。
+- 当前候选过滤聚焦较小标的，但“市值大所以数学上不可能十倍”“几个案例无信号所以所有量价方法已到头”均超出证据。原目标仍是反复捕捉多倍行情，十倍只是分档；洗盘及较低倍数研究仍按 STRATEGY_REVIEW.md 第 8 节。
+- TODO 中直接重定义 pre_day 并从头覆盖重跑的步骤，与保留旧基线的要求冲突；现有 02 号检测脚本也没有 OI 输入。此方案只能作为独立实验候选，不能按旧步骤直接执行。
+
+### 9.4 只读复跑
+
+项目根目录 PowerShell：
+
+```powershell
+@'
+import runpy
+import numpy as np
+import binance_box_strategy as base
+n = runpy.run_path('research/11_hit_rate_current.py', run_name='reading_check')
+m = n['score_live'](n['apply_gates'](n['load']()))
+p = m[m.label.eq(1)]
+print('positive / missing_tier:', len(p), int(p.tier.isna().sum()))
+for floor in [9, 10]:
+    g = p[p.gain.ge(floor)]
+    print('gain_floor / n / gate / score5 / score6:', floor, len(g), int(g.pass_gate.sum()), int((g.pass_gate & g.score.ge(5)).sum()), int((g.pass_gate & g.score.ge(6)).sum()))
+print(p.loc[p.gain.ge(9) & p.gain.lt(10), ['symbol', 'pre_day', 'gain']].to_string(index=False))
+print('all_score5 / score6:', int((p.pass_gate & p.score.ge(5)).sum()), int((p.pass_gate & p.score.ge(6)).sum()))
+online = np.array([base.deriv_score(r.oi_chg_1d, r.oi_chg_3d, r.ls_top)[0] for r in m.itertuples()])
+print('derivative_score_differences:', int((online != m.s_deriv.fillna(0)).sum()))
+print('historical_market_caps_known:', int(m.gate_cap_known.sum()))
+'@ | py -3.10 -B -
+py -3.10 -B -m unittest discover -s tests -v
+py -3.10 -B tools/glossary.py check
+```
+
+## 10. 请求治理接入（2026-10-05，P0–P2）
+
+用户批准按 P0（请求经济）→ P1（限流退让）→ P2（通路拆分+诚实降级）连续实施，当日完成。改前备份：`backup_20261005_request_governor/`。
+
+- **分域连接与降级**：`build_exchange` 按域收窄 `fetchMarkets`（现货只加载现货、合约只加载 U 本位线性；ccxt 默认两个域都请求，合约被封会连带现货初始化失败）。`connect_exchanges` 现货、合约分别连接，合约失败降级为 `None`，扫描按仅现货继续。
+- **限流退让**：429/418 按「域+出口」登记暂停（状态文件 `results/rate_limit_state.json`，跨重启、同机共享；损坏按 fail-open）；恢复时间解析自响应体 `banned until <毫秒>` 或 `Retry-After`，解析不到按 15 分钟保守退让并在日志注明；到期后只发一次恢复探测，失败进入 5 分钟冷却。
+- **请求经济**：1h 粒度的 OI/多空比按小时对齐缓存（`DERIV_CACHE=false` 可关，只缓存状态 ok 的结果）；市值按天缓存（`results/coingecko_caps.json`）；OI 快照与资金费率（不计分字段）推迟到第二遍，只对过门槛或展示行补取，其余行标 `extras_deferred`。
+- **诚实降级**：扫描 CSV 新增 `deriv_status`（ok/partial/failed/paused/no_futures）、`deriv_as_of`（数据观测时间）、`extras_deferred` 列；表格新增「合约数据」列；多空比回退口径一律标 `partial`（不冒充大户持仓口径，论证见 REASONING.md C4）。
+- **新增环境变量**：`DERIV_CACHE`（默认 true）、`RATE_LIMIT_STATE_FILE`（默认 `<csv_dir>/rate_limit_state.json`）。
+- **验收**：`tests/test_request_governor.py` 12 项 + `tests/test_candidate_pool.py` 6 项全部通过，覆盖封禁解析、跨重启暂停、单次探测、降级出池、小时缓存、展示行延后取数、fetchMarkets 分域、市值缓存。请求量为代码结构估算，实测单轮耗时/请求数留待观察计划第 8 节的试运行测量。

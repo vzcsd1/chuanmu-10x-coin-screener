@@ -1,0 +1,676 @@
+# 项目术语表 · 单一真源
+#
+# 用法（重要，别再手写第二份术语说明）
+#   1. 想加/改术语，只改本文件。
+#   2. 跑 `py -3.10 tools/glossary.py build` 重新生成 LEARNING.md 的词典部分。
+#   3. 跑 `py -3.10 tools/glossary.py check` 校验重复与遗漏。
+#
+# 字段说明
+#   id        唯一标识（英文短名，禁止重复；校验脚本按它查重）
+#   zh        中文名（用于文档显示）
+#   en        英文/代码名（可空）
+#   cat       分类：基础概念 / 数据源 / 指标 / 评分条件 / 方法论 / 工程 / 风险
+#   plain     一句话大白话（面向完全新手，禁止用其它未解释的术语）
+#   analogy   比喻（尽量给日常场景）
+#   where     在本项目哪里出现（文件:行 或 脚本名）
+#   caution   常见误解 / 坑（可空）
+#
+# 写新词条时的硬规则
+#   - 名称不得与已有 id / zh / en 重复（含大小写与全半角差异，校验脚本会拦）
+#   - plain 里若用到另一个术语，该术语必须已在本表存在
+#   - 不确定的结论不要写成结论，写进 caution 并注明"待验证"
+
+meta:
+  version: 4
+  updated: 2026-10-05
+  note: 本文件是项目所有术语解释的唯一来源；任何文档需要术语解释时引用本文件，不要复制粘贴。
+
+terms:
+
+  # ========================= 基础概念 =========================
+  - id: spot
+    zh: 现货
+    en: spot
+    cat: 基础概念
+    plain: 用真钱直接买卖币，一手交钱一手交货，币立刻到你账上。
+    analogy: 像菜市场买菜——给钱拿菜，菜就是你的。
+    where: binance_box_strategy.py 现货 exchange
+    caution: 现货买了就是你的资产，不会爆仓。
+
+  - id: futures
+    zh: 合约（永续）
+    en: futures / perpetual
+    cat: 基础概念
+    plain: 不买币本身，只赌价格涨跌的凭证。可以借钱放大，看错方向会被强制平仓（爆仓）。
+    analogy: 像打赌"明天会不会下雨"，赌对了赢钱，赌错了赔钱，跟下不下雨本身没关系。
+    where: binance_box_strategy.py 合约 exchange、fetch_deriv_context()
+    caution: 本项目只读合约数据来判断庄家动向，**自身不做合约交易**。
+
+  - id: usdt
+    zh: USDT（泰达币）
+    en: USDT
+    cat: 基础概念
+    plain: 一种跟美元 1:1 挂钩的稳定币，用来在币圈当"钱"计价。
+    analogy: 像赌场里的筹码，进出都用它换算，价值基本不变。
+    where: 所有交易对后缀 /USDT
+    caution: 它本身不是投资标的，本项目把它当计价单位。
+
+  - id: symbol
+    zh: 交易对
+    en: symbol
+    cat: 基础概念
+    plain: "两个币的组合写法，比如 BTC/USDT 表示'用 USDT 买 BTC'。"
+    analogy: 像商品标签"苹果-人民币"，说明拿什么换什么。
+    where: tickers 字典的 key
+    caution: 带冒号的（如 BTC/USDT:USDT）是合约，本项目现货筛选时排除。
+
+  - id: quote_volume
+    zh: 成交额
+    en: quoteVolume
+    cat: 基础概念
+    plain: 一段时间内买卖的总金额（按计价币算）。成交额大说明交易活跃。
+    analogy: 像店铺一天的营业额。
+    where: select_symbols() 的候选池闸门
+    caution: 成交额大 ≈ 币的市值大，本项目用它当市值的代理变量。**它是成交总量，不是资金净流入**（买卖双方都计入）。
+
+  - id: market_cap
+    zh: 市值
+    en: marketCap
+    cat: 基础概念
+    plain: 流通市值是流通中的币数量乘以当前价格，用于比较当前估价规模。
+    analogy: 把一批商品都按当前单价估价，总估价不等于有人实际花了这笔钱买走整批。
+    where: coingecko_caps()、Config.max_market_cap
+    caution: ~~涨十倍超过全市场总钱数，所以数学上不可能~~（2026-10-05 更正）。市值不是实际流入的钱，不能用今天的全市场市值证明未来价格上限；本项目市值过滤的收益价值待验证。
+
+  - id: pump
+    zh: 爆拉
+    en: pump
+    cat: 基础概念
+    plain: 短时间内价格快速大涨。本项目定义为波段低点起涨 ≥2 倍。
+    analogy: 像坐火箭，一小段时间冲上去。
+    where: research/02_detect_pumps.py、data/pumps.json
+    caution: 本项目研究的是 2–10 倍，不止十倍。
+
+  - id: pre_day
+    zh: 启动前一天
+    en: pre_day
+    cat: 基础概念
+    plain: 爆拉开始之前的那一天。策略要在这天就判断出"它可能要涨"。
+    analogy: 像赛前下注，必须在发令枪响之前押注才算本事。
+    where: data/features*.csv 的 pre_day 列
+    caution: 这是**评估时点**，所有特征只能用这天及之前的数据。
+
+  # ========================= 数据源 =========================
+  - id: binance_vision
+    zh: 币安公开数据仓库
+    en: data.binance.vision
+    cat: 数据源
+    plain: 币安免费放出的历史行情归档，不用 API Key、不用登录，直接下载。
+    analogy: 像图书馆的过期报纸合订本，随时去翻。
+    where: research/00_fetch.py、01_fetch_1d.py
+    caution: 这是文件下载，不占用 API 限流额度，比调接口安全。
+
+  - id: metrics_daily
+    zh: 合约指标日归档
+    en: um/daily/metrics
+    cat: 数据源
+    plain: 币安每天打包的合约持仓数据，5 分钟一个点，2020-09 至今。
+    analogy: 像银行每天给你的流水单，事后随时能查。
+    where: research/05_deriv_features.py、data/metrics_cache.parquet
+    caution: ~~只保留最近 30 天~~（2026-10-05 更正：误混实时接口限制）。日归档与实时查询不是同一来源；本地已有更早历史，具体日期和币种覆盖须逐文件核实。
+
+  - id: ohlcv
+    zh: K 线
+    en: OHLCV
+    cat: 数据源
+    plain: 一根蜡烛图包含四个价（开、高、低、收）加成交量，代表一段时间。
+    analogy: 像给价格拍的一张快照，压缩了这段时间的所有波动。
+    where: indicators() 的输入
+    caution: 本项目默认 1 小时一根。
+
+  - id: ccxt
+    zh: 交易所通用接口库
+    en: ccxt
+    cat: 数据源
+    plain: 一个 Python 库，用同一套写法就能连币安、OKX 等几百家交易所。
+    analogy: 像万能遥控器，一个遥控器控制所有品牌的电视。
+    where: requirements-binance-box.txt
+    caution: 它的 fetch_long_short_ratio_history 硬编码了全市场口径，要大户口径得走底层接口。
+
+  # ========================= 指标 =========================
+  - id: ema
+    zh: 指数移动平均线
+    en: EMA / EMA50
+    cat: 指标
+    plain: 价格的加权平均，越近的权重越高，反应比普通均线快。**它不是"只算最近 N 根"**——理论上会记住全部历史价格，只是越早的权重越小、趋近于 0。
+    analogy: 像"近期表现的加权平均分"，新成绩占比更大，但旧成绩不会完全消失。
+    where: indicators() 的 ewm(span=50, adjust=False)、条件 c_trend
+    caution: 本项目用 EMA50（span=50，1h K 线）。**改更早的几根 K 线，EMA 数值也会变**——所以它不是窗口指标。
+
+  - id: box
+    zh: 箱体
+    en: box
+    cat: 指标
+    plain: 价格在一段时间内上下震荡，画出一个矩形区间。突破上沿常被视为启动信号。
+    analogy: 价格在一个矩形盒子里来回撞，撞穿上沿叫"突破"。突破是弱信号，不等于必然启动。
+    where: box_score()、条件 c_breakout
+    caution: 实测箱体宽度、持续时间对预测爆拉基本没用（噪音）；保留下来的"突破"也只是弱信号（区分度 +5.7pp）。
+
+  - id: box_width
+    zh: 箱体宽度
+    en: box_width_pct
+    cat: 指标
+    plain: 箱体的上下幅度百分比。越窄说明盘整越紧。
+    analogy: 只是量一下这个箱子有多高多宽——纯粹描述形状，不代表会不会爆发。
+    where: box_score() 展示字段
+    caution: 实测区分度仅 +0.1pp，**不计分**，只展示。
+
+  - id: oi
+    zh: 未平仓合约量
+    en: OI / Open Interest
+    cat: 指标
+    plain: 尚未结束的合约持仓规模。本项目评分主要读取其按价格折算的总价值，价格变化也会影响这个数。
+    where: fetch_deriv_context()、条件 oi_chg_1d / 3d
+    caution: ~~OI 涨说明新钱进场、下注的人变多了~~（2026-10-05 更正）。盯盘时它用于提示持仓价值变化，例如价格上涨而合约数量不变，总价值也会增加；需结合价格及数量核查，不能单凭它确认新增资金或人数。
+
+  - id: funding_rate
+    zh: 资金费率
+    en: funding rate
+    cat: 指标
+    plain: 合约持仓者定期互相付的小额费用，用来让合约价格贴近现货。
+    analogy: 多空双方之间的定时"占位费"：合约价高于现货时多方向空方付，反之空方向多方付，目的是把合约价拉回现货。
+    where: fetch_deriv_context() 展示字段
+    caution: 实测样本外方向翻转，**不计分**。
+
+  - id: ls_top
+    zh: 大户持仓多空比
+    en: topLongShortPositionRatio / ls_top
+    cat: 指标
+    plain: 大资金的持仓里，做多和做空的比例。小于 1 说明大户偏空（可能被逼空）。
+    analogy: 像赌场里大户押注的方向表。
+    where: fetch_deriv_context()、条件 ls_top
+    caution: 口径陷阱——还有"全市场账户比"是另一个数。本项目用大户持仓口径。
+
+  - id: taker
+    zh: 主动买卖比
+    en: taker buy/sell ratio
+    cat: 指标
+    plain: 主动买单和主动卖单的比例，反映谁更着急。
+    analogy: 像排队时谁更急着成交。
+    where: fetch_deriv_context() 展示字段
+    caution: 未纳入计分。
+
+  - id: atr
+    zh: 平均真实波幅
+    en: ATR
+    cat: 指标
+    plain: 衡量价格**平均每根 K 线**波动多大的指标，用来设止损距离。本项目用**小时线**，所以是"每小时"的平均波动，**不是每天**。
+    analogy: 像给车设安全距离，车速越快留的余地越大——但这里的"车速"是按小时算的。
+    where: indicators() 的 true_range.rolling(atr_period)、Config.stop_atr
+    caution: 只用于计算参考止损位，不参与选币评分。**误当成"每天波动"会把止损距离估错。**
+
+  # ========================= 评分条件 =========================
+  - id: c_trend
+    zh: 趋势条件
+    en: c_trend
+    cat: 评分条件
+    plain: 收盘价高于 EMA50 就算成立，代表中期趋势向上。权重最高。
+    analogy: 看这个币自己是在上坡还是下坡——收盘价站在 50 小时均线上方，算中期向上。
+    where: WEIGHTS["c_trend"] = 5
+    caution: 单项 5 分，是全项目最高分。⚠️ 但**门槛=5 不等于"只看这一条"**——评分各项**相加**，oi_chg_1d(4)+c_v24up(1)=5 也能达标，无需趋势。（2026-10-05 更正）
+
+  - id: c_breakout
+    zh: 突破条件
+    en: c_breakout
+    cat: 评分条件
+    plain: 收盘价突破了之前箱体的上沿。
+    analogy: 像水位冲过堤坝。
+    where: WEIGHTS["c_breakout"] = 2
+    caution: 区分度 +5.7pp，是有效但较弱的信号。
+
+  - id: c_v24up
+    zh: 24h 量增
+    en: c_v24up
+    cat: 评分条件
+    plain: 最近 24 根的成交量超过前 24 根。**注意：成交量是"成交数量累加"，不是资金净流入**——买卖双方都计入；而且代码只要求"超过"，多一点点也算成立。
+    analogy: 像商场统计"今天进店人次"——人次多不等于营业额高（可能只是闲逛），更不等于钱流进了谁的口袋。
+    where: WEIGHTS["c_v24up"] = 1
+    caution: 它只加 1 分，门槛很低（"超过"即可）。**不能据此认定"资金进场 / 有人在吸筹"。** 重复的旧写法 c_v4up（4h 量增）已移出计分。
+
+  - id: oi_chg_1d
+    zh: OI 一日增速
+    en: oi_chg_1d
+    cat: 评分条件
+    plain: 未平仓合约量比一天前增长超过 10% 就算成立。
+    analogy: 赌桌筹码一天内多了 10%。
+    where: WEIGHTS["oi_chg_1d"] = 4、OI_1D_THRESHOLD = 0.10
+    caution: 样本外稳定性好（提升 1.57x），是合约侧最强条件。
+
+  - id: oi_chg_3d
+    zh: OI 三日增速
+    en: oi_chg_3d
+    cat: 评分条件
+    plain: 未平仓合约量比三天前增长超过 20% 就算成立。
+    analogy: 同上，看三天的趋势。
+    where: WEIGHTS["oi_chg_3d"] = 3、OI_3D_THRESHOLD = 0.20
+    caution: 与 oi_chg_1d 高度相关，所以权重给得低一些。
+
+  - id: extra_score
+    zh: 辅助分
+    en: extra_score
+    cat: 评分条件
+    plain: 市值、OKX 上架、合约成交量这些加分项，但**没经过回测验证**。
+    analogy: 像简历里的加分项——HR 会看到，但不决定你能不能进面试。
+    where: public_selection()
+    caution: **绝不参与门槛判定**。混进去会导致实盘与回测口径不一致（BTC 曾因此误选）。
+
+  - id: gate
+    zh: 闸门
+    en: gate
+    cat: 评分条件
+    plain: 进候选池前先按成交额与市值筛的一道关，把体量太大、翻不动的币排除掉。和"门槛"是两回事。
+    analogy: 像报考资格线——不符合条件的连参加考试的机会都没有，跟你能考多少分无关。
+    where: binance_box_strategy.py 的 max_quote_volume / max_market_cap
+    caution: **别和"门槛"混**：闸门按体量排除（BTC 是被它挡的），门槛（min_score）按总分选择。混为一谈会得出"门槛不能降"的错误结论。
+
+  - id: min_score
+    zh: 入选门槛
+    en: min_score
+    cat: 评分条件
+    plain: 核心分要达到这个值才能进候选池。
+    analogy: 像及格线。
+    where: Config.min_score
+    caution: ~~低于 5 就没有任何单项能达标，5 分意味着至少趋势成立~~（2026-10-05 更正）。4 分时 OI 一日项可单独达标；5 分时合约项组合也可达标，无需趋势成立。当前值为 5，是否更适合重复捕捉机会待验证，不是不可调整的数学下限。
+
+  - id: weights
+    zh: 评分权重
+    en: WEIGHTS
+    cat: 评分条件
+    plain: 每条条件值多少分。满分 18。
+    analogy: 像考试各题的分数分配。
+    where: binance_box_strategy.py:67
+    caution: **全项目唯一真源**，实盘和回测都 import 它。改分只改这一处。
+
+  # ========================= 方法论 =========================
+  - id: lookahead_bias
+    zh: 前视偏差
+    en: lookahead bias
+    cat: 方法论
+    plain: 用了当时还不知道的信息来判断，等于作弊。
+    analogy: 像用明天的报纸买今天的彩票。
+    where: research/08_audit_hindsight.py 检查项
+    caution: 常见来源：忘了 shift(1)、用当天收盘价判断当天开盘。
+
+  - id: hindsight
+    zh: 马后炮
+    en: hindsight bias
+    cat: 方法论
+    plain: 事后看什么都对，但当时根本判断不出来。
+    analogy: 像股评"我早就说过它会涨"。
+    where: research/08_audit_hindsight.py
+    caution: 与"前视偏差"区别：前者是数据错用，后者是逻辑上当时不可知。
+
+  - id: oos
+    zh: 样本外验证
+    en: out-of-sample / OOS
+    cat: 方法论
+    plain: 用没参与过调参的那段时间数据来测试，看策略是不是真的有效。
+    analogy: 像模拟考用没做过的卷子，才算真成绩。
+    where: research/07_oos_validate.py、SPLIT = 2025-01-01
+    caution: 只看样本内成绩漂亮没用，很可能是过拟合。
+
+  - id: overfit
+    zh: 过拟合
+    en: overfitting
+    cat: 方法论
+    plain: 把历史数据的噪音也当规律学进去了，换新数据就失效。
+    analogy: 像背答案而不是学方法，题一换就完蛋。
+    where: 各研究脚本的样本外检验
+    caution: 调参次数越多越容易过拟合。
+
+  - id: discriminative_power
+    zh: 区分度
+    en: discriminative power (pp)
+    cat: 方法论
+    plain: 爆拉组里满足条件的比例，减去对照组里满足条件的比例。
+    analogy: 像对比"病人组和健康组"某指标的差异。
+    where: research/08_audit_hindsight.py 的"区分度"列
+    caution: 单位是百分点(pp)。接近 0 表示**单独使用时**没测出差别——**不等于永久无用**：与其他条件组合、限定市场阶段、或放到洗盘过程里，仍可能有信息。不能据此"一律判死刑"。（2026-10-05 更正）
+
+  - id: lift
+    zh: 提升倍数
+    en: lift
+    cat: 方法论
+    plain: 用了这条规则后的命中率，是随机瞎选的多少倍。
+    analogy: 像吃某种药后治愈率是安慰剂的几倍。
+    where: research/*.py 的"提升倍数"列
+    caution: ⚠️ 它**也受样本正例占比影响**：同样识别能力，正例占比从 50% 降到 10%，提升倍数可从约 **1.6x 变成约 3.08x**。跨口径比较时**必须同时核对样本构成**，不能当万能换算尺。（2026-10-05 更正）
+
+  - id: precision_recall
+    zh: 精确率 / 召回率
+    en: precision / recall
+    cat: 方法论
+    plain: 精确率=选出来的里面有多少真会涨；召回率=真会涨的里面我抓到了多少。
+    analogy: 像撒网捕鱼——网小捕得准但漏得多，网大捕得多但混进杂物。
+    where: research/09_backtest_revised.py
+    caution: **没有固定的此消彼长关系**——调整规则可以两者同升、也可以两者同降（本项目放宽门槛后两者同时上升）。既不能只看一个，也不能假设"一个升另一个必降"。（2026-10-05 更正）
+
+  - id: false_negative
+    zh: 漏选 / 误杀
+    en: false negative
+    cat: 方法论
+    plain: 本来会爆拉的币，被策略当成不合格筛掉了。重点：这不是"选错"，是"该抓没抓到"。
+    analogy: 像渔网网眼太大——漏掉的那些里也有好鱼，只是当时分不出来。
+    where: research/11_hit_rate_current.py 的"未命中归因"
+    caution: 本项目说的"K线=5 整类被误杀"，指这一整档币因门槛设太高、单靠 K 线永远进不了池子（282 个爆拉币只命中 27 个）。
+
+  - id: auc
+    zh: AUC
+    en: ROC-AUC
+    cat: 方法论
+    plain: 衡量排序能力的分数，0.5 等于瞎猜，1.0 等于完美。
+    analogy: 像给裁判判分，看它把"好苹果"排在"坏苹果"前面的准确度。
+    where: research/09_backtest_revised.py
+    caution: 本项目 0.64–0.71，属于**弱信号**，不是必胜武器。
+
+  - id: control_group
+    zh: 对照组
+    en: control group
+    cat: 方法论
+    plain: 同一批币在"平静期"的样本，用来跟"爆拉前"比较，排除常见特征。
+    analogy: 像新药试验里的安慰剂组。
+    where: research/03_build_features.py、label=0 的样本
+    caution: 没有对照组，任何"条件"看起来都有效。
+
+  - id: cross_section
+    zh: 横截面排名
+    en: cross-sectional rank
+    cat: 方法论
+    plain: 在某一天，把所有币按某个指标排个名次。
+    analogy: 像考试排名，必须是全班一起排。
+    where: research/08_audit_hindsight.py 的 market_rank_1d()
+    caution: **分母必须是全市场**。本项目曾因在样本内排名导致条件退化（错误结论 −19.3pp）。
+
+  - id: calibre
+    zh: 口径
+    en: calibre / definition
+    cat: 方法论
+    plain: 同一个名字的数据，可能有好几种统计方式，数值完全不同。
+    analogy: 像"工资"可以是税前也可以是税后。
+    where: ls_top vs ls_count
+    caution: 本项目踩过最大的坑：用"全市场账户比"测出 +7.7pp，换成实盘用的"大户持仓比"只剩 +0.6pp。
+
+  # ========================= 工程 =========================
+  - id: single_source
+    zh: 单一真源
+    en: single source of truth
+    cat: 工程
+    plain: 同一个信息只在一处定义，其它地方都引用它，避免两边不一致。
+    analogy: 像只有一个总开关，不装两个互相打架的开关。
+    where: WEIGHTS、本术语表本身
+    caution: 本术语表就是按这个原则设计的。
+
+  - id: backtest
+    zh: 回测
+    en: backtest
+    cat: 工程
+    plain: 拿策略去跑历史数据，看如果当时用了会怎样。
+    analogy: 像用旧考卷自测。
+    where: research/09_backtest_revised.py
+    caution: 本项目是"事件级"回测（对爆拉事件比对特征），不是逐日含成交退出的资金曲线回测。
+
+  - id: rate_limit
+    zh: 限流 / 封禁
+    en: rate limit / 418 -1003
+    cat: 工程
+    plain: 请求太频繁被交易所拒绝服务，通常封几小时。
+    analogy: 像敲门太急被保安请出去。
+    where: 实盘扫描
+    caution: **限流分域名**——现货 api.binance.com 通了不代表合约 fapi.binance.com 通，要分别测。
+
+  - id: proxy
+    zh: 代理
+    en: proxy
+    cat: 工程
+    plain: 中转服务器，用来绕过网络限制。
+    analogy: 像寄信时先寄到朋友家再转交。
+    where: resolve_proxy()、BINANCE_PROXY 环境变量
+    caution: 机场端口会变（见过 7967→7897），不通时先逐个端口探测。
+
+  - id: parquet
+    zh: Parquet
+    en: parquet
+    cat: 工程
+    plain: 一种压缩的表格文件格式，比 CSV 小很多、读得快。
+    analogy: 像把衣服抽真空压缩收纳。
+    where: data/metrics_cache.parquet
+    caution: 需要 pyarrow 才能读。
+
+  - id: fail_open
+    zh: 失败放行
+    en: fail-open
+    cat: 工程
+    plain: 拿不到某个数据时，默认不拦截，而不是直接拒绝。
+    analogy: 像闸机坏了就敞开，而不是锁死。
+    where: select_symbols() 的市值缺失处理
+    caution: 与 fail-closed（失败就拦）相对，这里选 fail-open 是为了避免池子忽大忽小。
+
+  # ========================= 风险 =========================
+  - id: liquidation
+    zh: 爆仓
+    en: liquidation
+    cat: 风险
+    plain: 借钱炒合约亏到保证金不够，被系统强制平仓，本金归零。
+    analogy: 像押金赔光被赶出赌场。
+    where: 本项目不涉及（无下单路径）
+    caution: 一定要清楚：**本项目只筛选、不下单、不碰杠杆**。
+
+  - id: stablecoin
+    zh: 稳定币
+    en: stablecoin
+    cat: 风险
+    plain: 价格锚定美元的加密货币。
+    analogy: 像代金券，面值固定。
+    where: STABLECOINS 集合
+    caution: 这类币被排除出扫描范围，因为它们不会爆拉。
+
+  - id: delisting
+    zh: 下架
+    en: delisting
+    cat: 风险
+    plain: 交易所把某个币的交易对撤掉。
+    analogy: 像商场把某个柜台撤了。
+    where: active 字段过滤
+    caution: 下架消息有时反而引发轧空暴涨（本项目明确记录过的催化剂类型）。
+
+  - id: short_squeeze
+    zh: 轧空
+    en: short squeeze
+    cat: 风险
+    plain: 大量做空的人被迫买回，反过来推高价格，形成连锁上涨。
+    analogy: 像弹簧压到极限后空头集体回补——越买越涨，越涨越被迫买。
+    where: STRATEGY_REVIEW.md 催化剂类型
+    caution: 这是"下架币暴涨"的常见机制，量价指标很难提前捕捉。
+
+  - id: catalyst
+    zh: 催化剂
+    en: catalyst
+    cat: 风险
+    plain: 可能改变市场预期或买卖需求的事件，例如下架公告、品牌升级或项目进展；事件发生不保证上涨。
+    where: STRATEGY_REVIEW.md
+    caution: ~~只有催化剂能解释量价未捕捉的行情~~（2026-10-05 更正）。该排他性判断待验证。盯盘时核对公告时间、具体条款和价格反应，例如下架可能改变平仓需求，也可能引发抛售；不能见到公告就推断会涨。
+
+  # ===== 2026-10-05 补充：写 TODO.md 时发现缺失的术语 =====
+
+  - id: candidate_pool
+    zh: 候选池
+    en: candidate pool
+    cat: 基础概念
+    plain: 经过筛选后，进入最终评分的那批币。不是全市场，是缩小后的名单。
+    analogy: 像招聘先筛简历——投了 500 份，进面试的只有 30 人，这 30 人就是候选池。
+    where: select_symbols()、results/*.csv
+    caution: ~~不设上限会混进不可能十倍的币~~（2026-10-05 更正）。名单受成交额、市值、扫描数量及数据可得性共同影响；这些范围选择的收益与漏报代价待验证，入名单不等于应买入。
+
+  - id: hit_rate
+    zh: 命中率
+    en: hit rate
+    cat: 方法论
+    plain: 在全部历史爆拉事件里，策略能提前识别出来的比例。
+    analogy: 像守门员扑点球——100 个点球扑出 48 个，命中率就是 48%。
+    where: research/11_hit_rate_current.py
+    caution: 本项目当前配置（门槛=5）命中率 74.9%（822 个爆拉事件命中 616 个）；旧门槛=6 时为 48.1%（395 个）。
+
+  - id: live_trading
+    zh: 实盘
+    en: live trading
+    cat: 基础概念
+    plain: 用真实数据、真实运行的那一套，跟"研究/回测"相对。
+    analogy: 像正式比赛和训练赛的区别。
+    where: binance_box_strategy.py 扫描
+    caution: 本项目实盘只做筛选输出，**不下单**。
+
+  - id: drawdown
+    zh: 最大回撤
+    en: drawdown / max drawdown
+    cat: 方法论
+    plain: 资产**先创新高、再跌到之后最低点**的最大跌幅，衡量"最惨的时候亏多少"。**必须"先高后低"**——不能拿全程最高点和全程最低点直接相减。
+    analogy: 像坐过山车——只有"先到顶、再下落"的那一段才算；先跌后涨的那段不算回撤。
+    where: TODO.md C 段（vectorbt 回测）
+    caution: 本项目目前**没有**这个指标，因为还没有资金曲线回测。**反例**：路径 100→50→200，最大回撤是 **50%**（100 跌到 50），不是拿 200 和 50 算出的 75%。
+
+  - id: risk_reward
+    zh: 盈亏比
+    en: risk-reward ratio
+    cat: 方法论
+    plain: 这里是**预设**的「止盈距离 ÷ 止损距离」，**不是**已经赚到的平均盈亏。本项目该参数为 2.0，表示止盈目标挂在风险的 2 倍处。
+    analogy: 像出门前先定好"赚 20 就走、亏 10 就撤"——这是**计划**，不是最后的结果。
+    where: Config.reward_risk（take_profit = close + reward_risk × risk_per_unit）
+    caution: 它只决定下单时挂的止盈/止损位置。**真实盈亏比要等交易结果出来才知道**，两者不是一回事。盈亏比高也不代表赚钱，还要看胜率。
+
+  - id: equity_curve
+    zh: 资金曲线
+    en: equity curve
+    cat: 方法论
+    plain: 把每个时间点的账户余额连成一条线，看整体是赚是亏。
+    analogy: 像体重曲线——单看某天没意义，要看趋势。
+    where: TODO.md C 段（vectorbt 回测）
+    caution: 本项目目前只有"事件级回测"，没有资金曲线。
+
+  - id: event_backtest
+    zh: 事件级回测
+    en: event-level backtest
+    cat: 方法论
+    plain: 只看"爆拉之前那一天的各项数据对不对得上"，不模拟真实买卖。
+    analogy: 像只检查"考前复习有没有抓住重点"，不管实际考了多少分。
+    where: research/09_backtest_revised.py
+    caution: 它**不是**逐日含成交退出的收益回测，别把它当胜率。
+
+  - id: holder_concentration
+    zh: 筹码集中度
+    en: holder concentration
+    cat: 指标
+    plain: 少数钱包掌握了多少比例的币。**但地址不等于实际持有人**——交易所托管、锁仓、合约地址都要区别看待，所以不能直接推断"庄家控盘"。
+    analogy: 像统计一个微信群的成员数——账号数不等于真实人数，有小号、有机器人、也有机构代持。
+    where: TODO.md C 段（GoPlus）
+    caution: TUT 暴涨前前 100 钱包持 98.99%，是**现象记录**；但未识别这些地址的用途前，不能直接判定控盘。本项目目前没有这项数据。
+
+  - id: market_maker
+    zh: 做市商
+    en: market maker
+    cat: 基础概念
+    plain: 专门提供买卖盘、让交易能成交的机构。他们调币进出交易所会留下痕迹。
+    analogy: 交易所里的批发商——货从他手里进出会留下痕迹；痕迹能观察，但不等于他看涨。
+    where: TODO.md C 段（交易所净流入）
+    caution: 追踪做市商动向成本最高，但可能最直接。
+
+  - id: exchange_netflow
+    zh: 交易所净流入
+    en: exchange netflow
+    cat: 指标
+    plain: 转入交易所的币减去转出的币。大量转入通常意味着准备卖出，大量转出可能是囤币。
+    analogy: 像把币从保险柜搬到交易所货架上——货架库存突然变多，通常说明准备卖。
+    where: TODO.md C 段
+    caution: 需要链上数据，获取成本高。
+
+  - id: macro_regime
+    zh: 宏观环境
+    en: macro regime
+    cat: 方法论
+    plain: 整个市场是"进攻"还是"防守"的状态，比如 BTC 在涨还是跌。
+    analogy: 像出海看天气——晴天出海和台风天出海，策略该不一样。
+    where: TODO.md C 段
+    caution: 本项目目前没有这层过滤，risk-off 时照样输出一堆标的。
+
+  - id: degraded_scan
+    zh: 降级扫描
+    en: degraded scan
+    cat: 工程
+    plain: 部分数据拿不到时，用剩下的数据继续跑，而不是整个程序停掉。
+    analogy: 像手机没信号时还能用离线地图，而不是直接黑屏。
+    where: TODO.md A2
+    caution: 代价是那段时间评分系统性偏低（缺合约三项）。
+
+  - id: websocket
+    zh: 实时推送
+    en: websocket
+    cat: 工程
+    plain: 服务器主动把新消息推给你，不用你反复去问。
+    analogy: 像订阅报纸——新一期自动送到家，不用每天跑报刊亭。
+    where: TODO.md C 段（公告监控）
+    caution: 比定时轮询更实时，但依赖第三方库稳定性。
+
+  - id: sqlite
+    zh: SQLite
+    en: SQLite
+    cat: 工程
+    plain: 一个文件就是一个数据库，不需要装服务器，适合本地存记录。
+    analogy: 像 Excel 文件，但查询更快、更不容易写坏。
+    where: TODO.md C 段（结果落库）
+    caution: 用来长期存"每天选出哪些币"，才能事后统计真实命中率。
+
+  - id: vectorbt
+    zh: vectorbt
+    en: vectorbt
+    cat: 工程
+    plain: 一个 Python 回测库，能快速算出收益、回撤这些指标。
+    analogy: 像 Excel 的图表功能，但专门为"模拟交易"设计。
+    where: TODO.md C 段
+    caution: 用它需要先定义入场/出场规则，而本项目的定位可能与之冲突（只做筛选）。
+
+  - id: goplus
+    zh: GoPlus
+    en: GoPlus
+    cat: 数据源
+    plain: 一个免费提供代币安全与持币分布数据的服务。
+    analogy: 像查企业的工商信息，看这家公司股东都有谁。
+    where: TODO.md C 段（筹码集中度）
+    caution: 第三方 API，稳定性未验证。
+
+  # ===== 2026-10-05 补充：请求治理（P0–P2）=====
+
+  - id: backoff
+    zh: 限流退让
+    en: backoff
+    cat: 工程
+    plain: 被交易所限流或封禁后，立刻停止请求并等到恢复时间再试，而不是按固定间隔反复撞。
+    analogy: 像敲门被保安拒绝后先走开等通知，而不是站在门口一直敲——一直敲只会被封得更久。
+    where: binance_box_strategy.py 的 RateLimitState / RequestGuard、results/rate_limit_state.json
+    caution: 恢复时间解析自服务端返回（banned until 毫秒时间戳或 Retry-After 秒数）；解析不到时按保守值退让并在日志写明。到期后只发一次恢复探测，失败进入冷却。暂停按「域+出口」分开记——代理出口被封不影响直连出口。
+
+  - id: deriv_cache
+    zh: 合约数据小时缓存
+    en: deriv cache
+    cat: 工程
+    plain: OI 增速和大户持仓多空比是一小时一格的数据，取回来后同一小时内直接复用，不再重复问交易所。
+    analogy: 像把今天的课程表抄在手上——一天之内不用反复跑教务处问。
+    where: fetch_deriv_context() 的 _DERIV_CACHE、DERIV_CACHE_BUCKET_MS、环境变量 DERIV_CACHE
+    caution: 代价是数据最多滞后到「整点后第一轮取到的样子」；DERIV_CACHE=false 可关闭。只缓存状态为正常(ok)的结果，取失败的下一轮重试。
+
+  - id: deriv_status
+    zh: 合约数据状态
+    en: deriv_status
+    cat: 工程
+    plain: 标记每个币的合约数据是完整取到、只取到一部分、取失败，还是因限流暂停根本没去取。
+    analogy: 像快递单上的物流状态——「已签收/部分签收/派送失败/暂时停发」写清楚，才不会把"没送到"当成"没有货"。
+    where: 扫描 CSV 的 deriv_status / deriv_as_of 列、render_table 的「合约数据」列
+    caution: 取值 ok / partial / failed / paused / no_futures。**缺失 ≠ 没机会**：评分按缺项处理，缺项不是 0 分证据；deriv_as_of 是数据自身的观测时间，过期数据不能冒充当前证据。回退到全市场账户口径时一律标 partial，防止冒充大户持仓口径（见 REASONING.md C4）。

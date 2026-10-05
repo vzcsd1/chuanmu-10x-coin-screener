@@ -60,10 +60,7 @@ class CandidatePoolTests(TestCase):
         self.assertEqual(spot["market_scope"], "仅现货")
         self.assertIn("仅现货", output.getvalue())
         self.assertEqual(by_symbol["SWAP/USDT"]["score"], 13)
-        # fetch_deriv_context(futures, symbol, cfg, guard) —— 第 4 参是本轮 RequestGuard
-        self.deriv.assert_called_once()
-        args, _ = self.deriv.call_args
-        self.assertEqual(args[:3], (self.futures, "SWAP/USDT:USDT", self.cfg))
+        self.deriv.assert_called_once_with(self.futures, "SWAP/USDT:USDT", self.cfg)
         self.futures.fetch_open_interest.assert_called_once_with("SWAP/USDT:USDT")
         self.futures.fetch_funding_rate.assert_called_once_with("SWAP/USDT:USDT")
         fetched = [call.args[0] for call in self.spot.fetch_ohlcv.call_args_list]

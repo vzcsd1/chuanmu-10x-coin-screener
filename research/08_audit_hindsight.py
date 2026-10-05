@@ -54,6 +54,48 @@ def trailing_returns(symbol: str, pre_day: str) -> dict | None:
     return out
 
 
+def market_daily_returns() -> pd.DataFrame:
+    """全市场日收益矩阵：index = 交易日，columns = 交易对。
+
+    横截面排名必须用**全市场**做分母。用当前样本排名会退化——样本每天中位
+    只有 1 行、98.3% 的天数不超过 10 行，`rank <= 10` 于是恒为真，
+    "涨幅前十"变成人人满足的条件（对照命中率 100%），区分度失去意义。
+    """
+    series: dict[str, pd.Series] = {}
+    for path in sorted(D1.glob("*.parquet")):
+        try:
+            df = pd.read_parquet(path, columns=["open_time", "close"])
+        except Exception:  # noqa: BLE001
+            continue
+        ts = pd.to_numeric(df["open_time"], errors="coerce")
+        # 少数文件带脏时间戳（如 56796 年），先夹到合理区间再转 datetime
+        keep = ((ts >= 1_400_000_000_000) & (ts <= 2_000_000_000_000)).to_numpy()
+        if keep.sum() < 40:
+            continue
+        dt = (pd.to_datetime(ts.to_numpy()[keep], unit="ms", utc=True)
+              .tz_localize(None).normalize())
+        close = pd.Series(df["close"].to_numpy(float)[keep], index=dt)
+        series[path.stem] = close.groupby(level=0).last()
+    if not series:
+        return pd.DataFrame()
+    return pd.DataFrame(series).sort_index().pct_change(fill_method=None)
+
+
+def market_rank_1d(m: pd.DataFrame) -> pd.Series:
+    """把每个样本的 pre_day 放进全市场当日涨幅排名里取位次。"""
+    ret = market_daily_returns()
+    if ret.empty:
+        return pd.Series(np.nan, index=m.index)
+    rank = ret.rank(axis=1, ascending=False, method="min")
+    by_symbol = {sym: rank[sym] for sym in rank.columns}
+    days = pd.to_datetime(m["pre_day"])
+    out = []
+    for sym, day in zip(m["symbol"], days):
+        col = by_symbol.get(sym)
+        out.append(np.nan if col is None else col.get(day, np.nan))
+    return pd.Series(out, index=m.index)
+
+
 def main():
     k = pd.read_csv(DATA / "features.csv")
     d = pd.read_csv(DATA / "features_deriv.csv")
@@ -70,8 +112,13 @@ def main():
     m = m.merge(trdf, on=["symbol", "pre_day"], how="left")
 
     # 横截面：当日 24h 涨幅排名（模拟项目里的"涨幅前十"加分）
-    m["rank_1d"] = m.groupby("pre_day")["ret_1d"].rank(ascending=False, method="min")
+    # 必须按全市场排名；样本内排名会因每天样本过少而退化成恒真。
+    print("[audit] 计算全市场横截面涨幅排名 ...")
+    m["rank_1d"] = market_rank_1d(m)
     m["top10_gainer"] = m["rank_1d"] <= 10
+    matched = int(m["rank_1d"].notna().sum())
+    print(f"[audit] 排名匹配 {matched}/{len(m)} 行；"
+          f"未匹配的样本该条件按缺失处理")
 
     m.to_csv(DATA / "features_audit.csv", index=False, encoding="utf-8-sig")
 

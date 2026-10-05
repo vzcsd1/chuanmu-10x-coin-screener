@@ -9,3 +9,8 @@ connection-error.log
 
 # AI 助手内部工作记忆（有效结论已沉淀到根目录各报告与 PROJECT_CONTEXT.md）
 .workbuddy-ai/
+
+# 运行时状态（本机生成，不随仓库走）
+results/rate_limit_state.json
+results/coingecko_caps.json
+results/*.tmp

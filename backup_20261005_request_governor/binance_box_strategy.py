@@ -11,7 +11,6 @@ import json
 import logging
 import math
 import os
-import re
 import time
 import traceback
 import unicodedata
@@ -137,14 +136,6 @@ class Config:
     csv_dir: str | None = None
     require_okx: bool = True
     require_futures: bool = False
-    # —— 请求治理（2026-10-05，P0/P1）——
-    # deriv_cache：OI 增速 / 多空比是 1h 粒度数据，一小时才变一次；按小时对齐缓存后，
-    #   300s 轮询下同一小时只拉一次（按当前代码结构估算：合约数据请求 9,600 次/小时 → ~800 次/小时），
-    #   代价是数据最多滞后到整点后第一轮取到的样子。DERIV_CACHE=false 可关闭。
-    # rate_limit_state：分域限流暂停状态文件，跨重启、同机多进程共享；为空时跟随 csv_dir
-    #   （results/rate_limit_state.json），csv_dir 也为空则仅内存（测试用）。
-    deriv_cache: bool = True
-    rate_limit_state: str | None = None
 
 
 def registry_proxy() -> str | None:
@@ -241,8 +232,6 @@ def env_config() -> Config:
         csv_dir=os.getenv("CSV_DIR") or str(Path(__file__).resolve().parent / "results"),
         require_okx=os.getenv("REQUIRE_OKX", "true").lower() == "true",
         require_futures=os.getenv("REQUIRE_FUTURES", "false").lower() == "true",
-        deriv_cache=os.getenv("DERIV_CACHE", "true").lower() == "true",
-        rate_limit_state=os.getenv("RATE_LIMIT_STATE_FILE") or None,
     )
 
 
@@ -269,250 +258,39 @@ def apply_proxy(exchange: ccxt.binance, cfg: Config) -> ccxt.binance:
 
 def build_exchange(cfg: Config, default_type: str) -> ccxt.binance:
     # Public endpoints only: no credentials are read or required.
-    # fetchMarkets 按域收窄（2026-10-05）：ccxt 默认 spot/linear/inverse 全加载，
-    # 现货客户端初始化也会去请求合约域名——合约被封时现货会被连带拖死。
-    # 现货只加载现货市场；合约客户端只加载项目用到的 U 本位线性合约。
-    markets_by_type = {"spot": ["spot"], "future": ["linear"]}
     exchange = ccxt.binance({
         "enableRateLimit": True,
         "timeout": cfg.timeout_ms,
-        "options": {"defaultType": default_type,
-                    "fetchMarkets": markets_by_type.get(default_type, ["spot", "linear", "inverse"])},
+        "options": {"defaultType": default_type},
     })
     return apply_proxy(exchange, cfg)
 
 
-# ---------------------------------------------------------------------------
-# 请求治理（2026-10-05，P1：限流退让与恢复）
-#
-# 币安的 429 累计会升级为 418 IP 封禁，封禁响应体带 "banned until <毫秒时间戳>"。
-# 按固定间隔盲目重试会撞墙升级、把短封拖成长封，因此：
-#   - 收到限流/封禁：解析恢复时间，写入状态文件（分域 + 分出口，跨重启共享）
-#   - 暂停期间：该域直接跳过请求，不再触碰网络
-#   - 到期后：只发一次恢复探测；失败进入冷却，等待下一轮
-#   - 恢复成功：清除暂停状态
-# 恢复时间解析不到时按保守默认退让并在日志写明；状态文件损坏按无暂停处理（fail-open）。
-# 术语见 LEARNING.md「限流退让」；设计取舍见 REASONING.md C4。
-# ---------------------------------------------------------------------------
-SPOT_DOMAIN = "spot"      # api.binance.com
-FUTURES_DOMAIN = "futures"  # fapi.binance.com + /futures/data/*
-DEFAULT_BAN_BACKOFF_MS = 15 * 60_000  # 解析不到恢复时间时的保守退让
-PROBE_COOLDOWN_MS = 5 * 60_000        # 恢复探测失败后的最短等待
-
-_BAN_TS_RE = re.compile(r"banned until[^\d]*(\d{10,13})", re.IGNORECASE)
-_RETRY_AFTER_RE = re.compile(r"retry[-_ ]?after\D{0,5}(\d{1,6})", re.IGNORECASE)
-_LIMIT_ERRORS = (ccxt.RateLimitExceeded, ccxt.DDoSProtection)
-
-
-def _now_ms() -> int:
-    return int(time.time() * 1000)
-
-
-def human_ts(ms: float | None) -> str:
-    if not ms:
-        return "-"
-    return datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
-
-
-def parse_ban_until(message: Any) -> int:
-    """从限流/封禁响应里解析恢复时间（毫秒）；解析不到返回 0。"""
-    text = str(message or "")
-    match = _BAN_TS_RE.search(text)
-    if match:
-        ts = int(match.group(1))
-        return ts * 1000 if ts < 10**12 else ts
-    match = _RETRY_AFTER_RE.search(text)
-    if match:
-        return _now_ms() + int(match.group(1)) * 1000
-    return 0
-
-
-class RateLimitState:
-    """分域限流暂停状态：JSON 落盘、每次判断前重读，同机多进程共享同一份。
-
-    键是「域|出口」——代理出口和直连是不同 IP，被封的只是其中一个，不能互相牵连。
-    """
-
-    def __init__(self, path: str | os.PathLike | None):
-        self.path = Path(path) if path else None
-        self.domains: dict[str, dict[str, Any]] = {}
-
-    @classmethod
-    def load(cls, path: str | os.PathLike | None) -> "RateLimitState":
-        state = cls(path)
-        if state.path is None:
-            return state
-        try:
-            if state.path.exists():
-                raw = json.loads(state.path.read_text(encoding="utf-8"))
-                for key, item in (raw.get("domains") or {}).items():
-                    state.domains[key] = {
-                        "banned_until_ms": int(item.get("banned_until_ms") or 0),
-                        "probe_at_ms": int(item.get("probe_at_ms") or 0),
-                        "paused_since_ms": int(item.get("paused_since_ms") or 0),
-                        "reason": str(item.get("reason") or "")[:200],
-                    }
-        except Exception:
-            logging.warning("限流状态文件 %s 无法读取，按无暂停处理（fail-open）",
-                            state.path, exc_info=True)
-            state.domains = {}
-        return state
-
-    def reload(self) -> None:
-        """吸收同机其它进程的写入；无文件时是空操作。"""
-        if self.path is None:
-            return
-        fresh = RateLimitState.load(self.path)
-        self.domains = fresh.domains
-
-    def save(self) -> None:
-        if self.path is None:
-            return
-        try:
-            self.path.parent.mkdir(parents=True, exist_ok=True)
-            tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"domains": self.domains}, ensure_ascii=False, indent=1),
-                           encoding="utf-8")
-            tmp.replace(self.path)
-        except Exception:
-            logging.warning("限流状态文件写入失败 %s", self.path, exc_info=True)
-
-    def should_attempt(self, key: str, now: int | None = None) -> bool:
-        now = _now_ms() if now is None else now
-        self.reload()
-        item = self.domains.get(key)
-        if not item:
-            return True
-        until = item.get("banned_until_ms", 0)
-        if until and now < until:
-            return False
-        probe_at = item.get("probe_at_ms", 0)
-        if probe_at and probe_at >= item.get("paused_since_ms", 0) \
-                and now < probe_at + PROBE_COOLDOWN_MS:
-            # 本次暂停窗口内已探测过：无论成败先冷却，避免多进程同时轰炸
-            return False
-        return True
-
-    def until(self, key: str) -> int:
-        return int((self.domains.get(key) or {}).get("banned_until_ms", 0))
-
-    def record_pause(self, key: str, until_ms: int, reason: str, now: int | None = None) -> None:
-        now = _now_ms() if now is None else now
-        until = int(until_ms) if until_ms and until_ms > now else now + DEFAULT_BAN_BACKOFF_MS
-        note = str(reason or "")[:200]
-        if not (until_ms and until_ms > now):
-            note = f"未解析到恢复时间，暂按 {DEFAULT_BAN_BACKOFF_MS // 60_000} 分钟退让；{note}"
-        item = self.domains.setdefault(key, {})
-        item.update({"banned_until_ms": until,
-                     "paused_since_ms": item.get("paused_since_ms") or now,
-                     "probe_at_ms": 0, "reason": note})
-        logging.warning("%s 被限流/封禁：暂停至 %s（%s）", key, human_ts(until), note)
-        self.save()
-
-    def mark_probe(self, key: str, now: int | None = None) -> None:
-        now = _now_ms() if now is None else now
-        item = self.domains.setdefault(key, {})
-        item.setdefault("paused_since_ms", now)
-        item["probe_at_ms"] = now
-        self.save()
-
-    def clear(self, key: str) -> None:
-        if key in self.domains:
-            del self.domains[key]
-            self.save()
-
-
-class DomainPaused(Exception):
-    """域处于限流暂停期：调用方应把数据记为缺失，而不是报错中断。"""
-
-
-class RequestGuard:
-    """按「域+出口」治理请求：暂停期内直接拒绝，封禁时登记，恢复探测只发一次。"""
-
-    def __init__(self, state: RateLimitState, cfg: Config):
-        self.state = state
-        self.cfg = cfg
-
-    def key(self, domain: str) -> str:
-        return f"{domain}|{self.cfg.proxy or 'direct'}"
-
-    def run(self, domain: str, fn, *args, **kwargs):
-        key = self.key(domain)
-        if not self.state.should_attempt(key):
-            raise DomainPaused(f"{key} 限流暂停中（至 {human_ts(self.state.until(key))}）")
-        entry = self.state.domains.get(key)
-        if entry and entry.get("banned_until_ms"):
-            self.state.mark_probe(key)  # 到期后的第一次调用就是恢复探测
-        try:
-            result = fn(*args, **kwargs)
-        except _LIMIT_ERRORS as exc:
-            self.state.record_pause(key, parse_ban_until(exc), f"{type(exc).__name__}: {exc}")
-            raise
-        if key in self.state.domains:
-            self.state.clear(key)
-        return result
-
-
-def default_state_path(cfg: Config) -> str | os.PathLike | None:
-    if cfg.rate_limit_state:
-        return cfg.rate_limit_state
-    if cfg.csv_dir:
-        return Path(cfg.csv_dir) / "rate_limit_state.json"
-    return None
-
-
-def connect_exchanges(cfg: Config, attempts: int = 3) -> tuple[ccxt.binance, ccxt.binance | None, Config]:
-    """分别连接现货与合约两个域：合约失败降级为 None，不再拖垮整个扫描。
-
-    现货是必需域（失败则整体抛错）；合约是可选域——封禁/连接失败时返回 None，
-    扫描按仅现货模式继续，合约三项记为缺失并标注。封禁时按域登记暂停，
-    不再对同一出口盲目重试；网络类错误仍做有限次重试。
-    """
-    state = RateLimitState.load(default_state_path(cfg))
-    spot, spot_cfg = _connect_domain(SPOT_DOMAIN, "spot", cfg, attempts, state, required=True)
-    futures, _ = _connect_domain(FUTURES_DOMAIN, "future", cfg, attempts, state, required=False)
-    return spot, futures, spot_cfg
-
-
-def _connect_domain(domain: str, default_type: str, cfg: Config, attempts: int,
-                    state: RateLimitState, required: bool):
-    from dataclasses import replace
-    configs = [cfg] + ([replace(cfg, proxy=None)] if cfg.proxy else [])
+def connect_exchanges(cfg: Config, attempts: int = 3) -> tuple[ccxt.binance, ccxt.binance, Config]:
+    """Load spot/futures markets with retries and a direct-connect fallback."""
     last_error: Exception | None = None
+    configs = [cfg]
+    if cfg.proxy:
+        from dataclasses import replace
+        configs.append(replace(cfg, proxy=None))
     for candidate in configs:
         mode = f"代理 {candidate.proxy}" if candidate.proxy else "直连"
-        guard = RequestGuard(state, candidate)
-        key = guard.key(domain)
         for attempt in range(1, attempts + 1):
-            if not state.should_attempt(key):
-                logging.error("%s 在 %s 出口处于限流暂停期（至 %s），跳过连接",
-                              domain, mode, human_ts(state.until(key)))
-                last_error = last_error or DomainPaused(
-                    f"{key} 限流暂停中（至 {human_ts(state.until(key))}）")
-                break
             try:
-                print(f"连接币安 {domain}（{mode}，第 {attempt}/{attempts} 次）...")
-                exchange = build_exchange(candidate, default_type)
-                exchange.load_markets()
-                if key in state.domains:
-                    state.clear(key)
-                return exchange, candidate
-            except _LIMIT_ERRORS as exc:
-                last_error = exc
-                state.record_pause(key, parse_ban_until(exc), f"{type(exc).__name__}: {exc}")
-                logging.error("%s 在 %s 出口被封禁，停止对该出口重试", domain, mode)
-                break
+                print(f"连接币安（{mode}，第 {attempt}/{attempts} 次）...")
+                spot = exchange_from_env(candidate)
+                futures = futures_exchange(candidate)
+                spot.load_markets()
+                futures.load_markets()
+                return spot, futures, candidate
             except Exception as exc:
                 last_error = exc
-                logging.warning("连接失败 %s (%d/%d): %s", mode, attempt, attempts, exc)
+                logging.warning("Binance connection failed via %s (%d/%d): %s",
+                                mode, attempt, attempts, exc)
                 if attempt < attempts:
                     time.sleep(2)
-    if required:
-        assert last_error is not None
-        raise last_error
-    if last_error is not None:
-        logging.error("合约域连接失败，暂停期内仅跑现货维度（合约三项记为缺失）: %s", last_error)
-    return None, None
+    assert last_error is not None
+    raise last_error
 
 
 def exchange_from_env(cfg: Config) -> ccxt.binance:
@@ -666,16 +444,9 @@ def deriv_score(oi_chg_1d: float | None = None, oi_chg_3d: float | None = None,
 
 DERIV_PERIOD = "1h"
 DERIV_LOOKBACK = 200  # 1h × 200 ≈ 8.3 天，覆盖 3 日增速所需窗口
-DERIV_CACHE_BUCKET_MS = 3_600_000  # 数据是 1h 粒度：按小时对齐缓存，一小时内复用
-_DERIV_CACHE: dict[tuple[str, int], dict[str, Any]] = {}
 
 
-def clear_deriv_cache() -> None:
-    _DERIV_CACHE.clear()
-
-
-def fetch_deriv_context(futures: ccxt.binance, symbol: str, cfg: Config,
-                        guard: "RequestGuard | None" = None) -> dict[str, Any]:
+def fetch_deriv_context(futures: ccxt.binance, symbol: str, cfg: Config) -> dict[str, Any]:
     """拉取历史 OI 与大户持仓多空比，算出评估时点已知的增速。
 
     数据源是币安公开的 /futures/data/* 接口，无需 API Key；该组接口只保留
@@ -687,43 +458,15 @@ def fetch_deriv_context(futures: ccxt.binance, symbol: str, cfg: Config,
       ls_top                 基于 topLongShortPositionRatio（大户持仓多空比），
                              对应 metrics 的 sum_toptrader_long_short_ratio；
                              该接口不可用时回退到 ccxt 的全市场账户比，并在
-                             ls_source 标注实际口径；**回退口径一律记为 partial**，
-                             防止另一种多空比冒充大户持仓口径（见 REASONING.md C4）
-
-    请求治理（2026-10-05）：
-      - 1h 粒度数据按小时对齐缓存（DERIV_CACHE=false 可关），只缓存状态 ok 的结果
-      - guard 传入时受分域暂停约束；暂停/失败不假装有数据，状态写在返回值里：
-        status ∈ ok / partial / failed / paused；as_of 为所用数据的观测时间戳
+                             ls_source 标注实际口径，避免口径混淆
     """
-    bucket = _now_ms() // DERIV_CACHE_BUCKET_MS
-    key = (symbol, bucket)
-    if cfg.deriv_cache:
-        cached = _DERIV_CACHE.get(key)
-        if cached is not None:
-            return cached
-    out = _fetch_deriv_context_live(futures, symbol, cfg, guard)
-    if cfg.deriv_cache and out.get("status") == "ok":
-        _DERIV_CACHE[key] = out
-    return out
-
-
-def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
-                              guard: "RequestGuard | None" = None) -> dict[str, Any]:
     out: dict[str, Any] = {"oi_chg_1d": None, "oi_chg_3d": None,
-                           "ls_top": None, "ls_chg_3d": None, "ls_source": None,
-                           "status": "failed", "as_of": None}
+                           "ls_top": None, "ls_chg_3d": None, "ls_source": None}
     market_id = futures.market(symbol)["id"]
 
-    def call(fn, *args, **kwargs):
-        if guard is None:
-            return fn(*args, **kwargs)
-        return guard.run(FUTURES_DOMAIN, fn, *args, **kwargs)
-
-    as_of = 0
-    ok_oi = ok_ls = False
     try:
-        raw = call(futures.fapiDataGetOpenInterestHist,
-                   {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
+        raw = futures.fapiDataGetOpenInterestHist(
+            {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
         series = [(_as_float(item.get("sumOpenInterestValue"), float("nan")),
                    int(item.get("timestamp") or 0)) for item in raw]
         series = [(v, t) for v, t in series if math.isfinite(v) and v > 0 and t]
@@ -734,17 +477,12 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
                 past = [v for v, t in series if t <= cutoff]
                 if past and past[-1] > 0:
                     out[key] = current_value / past[-1] - 1.0
-            as_of = max(as_of, current_ts)
-            ok_oi = True
-    except DomainPaused:
-        out["status"] = "paused"
-        return out
     except Exception as exc:  # noqa: BLE001
         logging.debug("OI history unavailable for %s: %s", symbol, exc)
 
     try:
-        raw = call(futures.fapiDataGetTopLongShortPositionRatio,
-                   {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
+        raw = futures.fapiDataGetTopLongShortPositionRatio(
+            {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
         series = []
         for item in raw:
             ratio = _as_float(item.get("longShortRatio"), float("nan"))
@@ -762,16 +500,10 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
             past = [v for v, t in series if t and t <= cutoff]
             if past:
                 out["ls_chg_3d"] = series[-1][0] - past[-1]
-            as_of = max(as_of, series[-1][1])
-            ok_ls = True
-    except DomainPaused:
-        out["status"] = "paused"
-        return out
     except Exception as exc:  # noqa: BLE001
         logging.debug("top position ratio unavailable for %s: %s", symbol, exc)
         try:
-            raw = call(futures.fetch_long_short_ratio_history, symbol, DERIV_PERIOD,
-                       limit=DERIV_LOOKBACK)
+            raw = futures.fetch_long_short_ratio_history(symbol, DERIV_PERIOD, limit=DERIV_LOOKBACK)
             series = [(float(item["longShortRatio"]), int(item.get("timestamp") or 0))
                       for item in raw if item.get("longShortRatio") is not None]
             if series:
@@ -781,40 +513,14 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
                 past = [v for v, t in series if t and t <= cutoff]
                 if past:
                     out["ls_chg_3d"] = series[-1][0] - past[-1]
-                as_of = max(as_of, series[-1][1])
-                # 注意：回退口径不把 ok_ls 置真——它不是被回测验证过的大户持仓口径
-        except DomainPaused:
-            out["status"] = "paused"
-            return out
         except Exception as exc2:  # noqa: BLE001
             logging.debug("long/short ratio unavailable for %s: %s", symbol, exc2)
 
-    out["as_of"] = as_of or None
-    out["status"] = "ok" if (ok_oi and ok_ls) else ("partial" if (ok_oi or ok_ls) else "failed")
     return out
 
 
-def caps_cache_path(cfg: Config) -> Path:
-    base_dir = Path(cfg.csv_dir) if cfg.csv_dir else Path(__file__).resolve().parent / "results"
-    return base_dir / "coingecko_caps.json"
-
-
-def coingecko_caps(cfg: Config, cache_path: Path | None = None) -> dict[str, float]:
-    """Best-effort public market caps keyed by uppercase ticker symbol.
-
-    市值一天变不了多少，而免费接口很容易 429：按天缓存到本地（默认
-    results/coingecko_caps.json），当天内的重复扫描不再消耗请求。缓存读取失败
-    时按无缓存处理（fail-open），重新联网获取。
-    """
-    path = Path(cache_path) if cache_path else caps_cache_path(cfg)
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    try:
-        if path.exists():
-            raw = json.loads(path.read_text(encoding="utf-8"))
-            if raw.get("date") == today and isinstance(raw.get("caps"), dict):
-                return {str(k): float(v) for k, v in raw["caps"].items()}
-    except Exception:
-        logging.warning("市值缓存读取失败，重新联网获取 %s", path, exc_info=True)
+def coingecko_caps(cfg: Config) -> dict[str, float]:
+    """Best-effort public market caps keyed by uppercase ticker symbol."""
     caps: dict[str, float] = {}
     proxies = requests_proxies(cfg)
     for page in range(1, 5):
@@ -832,34 +538,14 @@ def coingecko_caps(cfg: Config, cache_path: Path | None = None) -> dict[str, flo
             if symbol and cap:
                 # Symbol collisions exist; retaining the largest cap is conservative.
                 caps[symbol] = max(caps.get(symbol, 0), float(cap))
-    try:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps({"date": today, "caps": caps}), encoding="utf-8")
-    except Exception:
-        logging.warning("市值缓存写入失败 %s", path, exc_info=True)
     return caps
 
 
-def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: Config,
+def public_selection(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config,
                      okx: ccxt.okx | None = None) -> list[dict[str, Any]]:
-    """Rank Binance symbols with the programmable parts of the Chuanmu notes.
-
-    请求治理（2026-10-05）：现货域暂停时整轮跳过；合约域暂停/失败时现货照常出池，
-    合约数据按 deriv_status 标注（ok/partial/failed/paused/no_futures），不假装有数据。
-    """
-    guard = RequestGuard(RateLimitState.load(default_state_path(cfg)), cfg)
-    spot_until = guard.state.until(guard.key(SPOT_DOMAIN))
-    if spot_until and _now_ms() < spot_until:
-        raise DomainPaused(f"现货域限流暂停中（至 {human_ts(spot_until)}），本轮跳过")
+    """Rank Binance symbols with the programmable parts of the Chuanmu notes."""
     tickers = exchange.fetch_tickers()
-    futures_tickers: dict[str, Any] = {}
-    if futures is not None:
-        try:
-            futures_tickers = guard.run(FUTURES_DOMAIN, futures.fetch_tickers)
-        except DomainPaused:
-            logging.warning("合约域限流暂停中：本轮合约数据记为缺失，现货继续扫描")
-        except Exception as exc:
-            logging.warning("合约行情不可用，本轮按无合约数据处理: %s", exc)
+    futures_tickers = futures.fetch_tickers()
     okx_markets: dict[str, Any] = {}
     okx_tickers: dict[str, Any] = {}
     if okx is not None:
@@ -868,13 +554,11 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             okx_tickers = okx.fetch_tickers()
         except Exception as exc:
             logging.warning("OKX data unavailable: %s", exc)
-    future_by_base: dict[str, str] = {}
-    if futures is not None:
-        future_by_base = {
-            market["base"]: symbol for symbol, market in futures.markets.items()
-            if market.get("swap") and market.get("linear") and market.get("quote") == "USDT"
-            and market.get("active", True)
-        }
+    future_by_base = {
+        market["base"]: symbol for symbol, market in futures.markets.items()
+        if market.get("swap") and market.get("linear") and market.get("quote") == "USDT"
+        and market.get("active", True)
+    }
     caps: dict[str, float] = {}
     if cfg.use_coingecko:
         try:
@@ -899,9 +583,7 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             future_symbol = future_by_base.get(base)
             if cfg.require_futures and not future_symbol:
                 continue
-            # 逐币 K 线是现货域请求：暂停时直接中止本轮（guard 不会触碰网络）
-            candles = guard.run(SPOT_DOMAIN, exchange.fetch_ohlcv,
-                                symbol, cfg.timeframe, limit=cfg.lookback)
+            candles = exchange.fetch_ohlcv(symbol, cfg.timeframe, limit=cfg.lookback)
             df = indicators(candles, cfg)
             if len(df) < cfg.box_period + 3:
                 continue
@@ -918,8 +600,6 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             # 市值 / OKX / 合约量 / OI市值比这几类条件在历史回测里缺数据、**未经验证**，
             # 若混进 score 会让实盘门槛与回测门槛口径不一致（例如 BTC 仅凭"趋势+合约量+OKX"
             # 就能凑到 7 分过门槛）。因此单独累计到 extra_score，只作展示与人工参考。
-            # 其中 OI 快照与资金费率要逐币请求且不计分（P0）：推迟到第二遍，只对
-            # 过门槛/展示行补取，其余行 extras_deferred=True 明确标注缺这块。
             extra_score = 0
             extra_hits: list[str] = []
             if future_symbol and futures_volume >= quote_volume:
@@ -934,6 +614,22 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             if volume_cap_ratio and volume_cap_ratio >= 0.60:
                 extra_score += 2
                 extra_hits.append("成交量/市值>=60%")
+            oi_value = None
+            if future_symbol:
+                try:
+                    oi = futures.fetch_open_interest(future_symbol)
+                    oi_value = _as_float(oi.get("openInterestValue"))
+                    if not oi_value:
+                        oi_value = _as_float(oi.get("openInterestAmount")) * _as_float(ft.get("last") or ft.get("close"))
+                except Exception:
+                    logging.debug("open interest unavailable for %s", future_symbol, exc_info=True)
+            oi_cap_ratio = oi_value / cap if cap and oi_value else None
+            if oi_cap_ratio and oi_cap_ratio >= 0.30:
+                extra_score += 1
+                extra_hits.append("OI/市值>=30%")
+            if oi_cap_ratio and oi_cap_ratio >= 1.0:
+                extra_score += 1
+                extra_hits.append("OI>=市值")
             okx_swap = any(
                 market.get("base") == base and market.get("quote") == "USDT"
                 and market.get("swap") and market.get("active", True)
@@ -942,21 +638,16 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             if okx_swap:
                 extra_score += 1
                 extra_hits.append("币安+OKX合约")
-            # 合约侧：OI 增速 + 大户持仓多空比（实测提升倍数最高的一维）。
-            # 暂停/失败时 deriv_score 按缺项处理——缺失不是 0 分证据，状态单独标注。
-            deriv: dict[str, Any] = {}
-            deriv_status = "no_futures"
-            deriv_as_of = None
+            funding_rate = None
             if future_symbol:
                 try:
-                    deriv = fetch_deriv_context(futures, future_symbol, cfg, guard)
-                except DomainPaused:
-                    deriv = {"status": "paused"}
+                    funding = futures.fetch_funding_rate(future_symbol)
+                    funding_rate = _as_float(funding.get("fundingRate"), default=float("nan"))
+                    # 资金费率仅展示，不计分。
                 except Exception:
-                    logging.exception("deriv context failed for %s", future_symbol)
-                    deriv = {"status": "failed"}
-                deriv_status = str(deriv.get("status") or "ok")
-                deriv_as_of = deriv.get("as_of")
+                    logging.debug("funding unavailable for %s", future_symbol, exc_info=True)
+            # 合约侧：OI 增速 + 大户持仓多空比（实测提升倍数最高的一维）
+            deriv = fetch_deriv_context(futures, future_symbol, cfg) if future_symbol else {}
             deriv_points, deriv_details = deriv_score(
                 deriv.get("oi_chg_1d"), deriv.get("oi_chg_3d"),
                 deriv.get("ls_top"), deriv.get("ls_chg_3d"))
@@ -979,74 +670,27 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             rows.append({"symbol": symbol, "score": score, "max_score": MAX_SCORE,
                          "score_kline": kline_points,
                          "score_deriv": deriv_points if future_symbol else None,
-                         "deriv_status": deriv_status, "deriv_as_of": deriv_as_of,
                          "has_futures": bool(future_symbol),
                          "market_scope": "现货+合约" if future_symbol else "仅现货",
                          "extra_score": extra_score,
-                         "_extra_hits": extra_hits,
-                         "_future_symbol": future_symbol,
                          "conditions_met": len(hit_conditions),
                          "conditions": ",".join(hit_conditions) or "无",
+                         "extra_conditions": ",".join(extra_hits) or "无",
                          "market_cap": cap,
                          "spot_quote_volume": quote_volume, "futures_quote_volume": futures_volume,
                          "okx_quote_volume": okx_volume, "volume_cap_ratio": volume_cap_ratio,
-                         "open_interest_value": None, "oi_cap_ratio": None,
-                         "funding_rate": None, "percentage_24h": percentage,
+                         "open_interest_value": oi_value, "oi_cap_ratio": oi_cap_ratio,
+                         "funding_rate": funding_rate, "percentage_24h": percentage,
                          "okx_contract": okx_swap, "ls_source": deriv.get("ls_source"),
                          **details,
                          "entry": trade_levels.get("entry"), "stop": trade_levels.get("stop"),
                          "take_profit": trade_levels.get("take_profit"),
                          "breakout": bool(df.iloc[-2].close > df.iloc[-2].box_high)})
-        except DomainPaused as exc:
-            logging.error("数据域处于限流暂停期，本轮扫描中止: %s", exc)
-            raise
         except Exception:
             logging.exception("failed scoring %s", symbol)
     # 原先此处会给"24h 涨幅前十"的标的 +1 分。实测该项区分度 −0.0pp、提升倍数
     # 0.99x（纯噪音，详见文件头 WEIGHTS 上方说明），本质是奖励"已经涨过的币"，已删除。
-    ranked = sorted(rows, key=lambda x: (x["score"], x["futures_quote_volume"]), reverse=True)
-    chosen = [x for x in ranked if x["score"] >= cfg.min_score]
-    shown = chosen or ranked[:10]
-    # —— 第二遍：OI 快照与资金费率只对展示行（过门槛，或无过门槛时的前 10）补取 ——
-    shown_symbols = {x["symbol"] for x in shown}
-    for row in rows:
-        future_symbol = row.pop("_future_symbol", None)
-        extra_hits = row.pop("_extra_hits")
-        row["extras_deferred"] = bool(future_symbol) and row["symbol"] not in shown_symbols
-        oi_value = None
-        funding_rate = None
-        if future_symbol and not row["extras_deferred"]:
-            try:
-                oi = guard.run(FUTURES_DOMAIN, futures.fetch_open_interest, future_symbol)
-                oi_value = _as_float(oi.get("openInterestValue"))
-                if not oi_value:
-                    ft = futures_tickers.get(future_symbol, {})
-                    oi_value = (_as_float(oi.get("openInterestAmount"))
-                                * _as_float(ft.get("last") or ft.get("close")))
-            except DomainPaused:
-                pass
-            except Exception:
-                logging.debug("open interest unavailable for %s", future_symbol, exc_info=True)
-            try:
-                funding = guard.run(FUTURES_DOMAIN, futures.fetch_funding_rate, future_symbol)
-                funding_rate = _as_float(funding.get("fundingRate"), default=float("nan"))
-                # 资金费率仅展示，不计分。
-            except DomainPaused:
-                pass
-            except Exception:
-                logging.debug("funding unavailable for %s", future_symbol, exc_info=True)
-        row["open_interest_value"] = oi_value
-        cap = row.get("market_cap")
-        row["oi_cap_ratio"] = (oi_value / cap) if (cap and oi_value) else None
-        if row["oi_cap_ratio"] and row["oi_cap_ratio"] >= 0.30:
-            row["extra_score"] += 1
-            extra_hits.append("OI/市值>=30%")
-        if row["oi_cap_ratio"] and row["oi_cap_ratio"] >= 1.0:
-            row["extra_score"] += 1
-            extra_hits.append("OI>=市值")
-        row["funding_rate"] = funding_rate
-        row["extra_conditions"] = ",".join(extra_hits) or "无"
-    return ranked
+    return sorted(rows, key=lambda x: (x["score"], x["futures_quote_volume"]), reverse=True)
 
 
 def select_symbols(tickers: dict[str, Any], cfg: Config,
@@ -1096,24 +740,11 @@ def human_money(value: float | None) -> str:
     return f"{value:.0f}"
 
 
-DERIV_STATUS_LABELS = {
-    "ok": "正常", "partial": "部分缺失", "failed": "获取失败",
-    "paused": "限流暂停", "no_futures": "无合约",
-}
-
-
-def deriv_status_label(row: dict[str, Any]) -> str:
-    if not row.get("has_futures"):
-        return "无合约"
-    return DERIV_STATUS_LABELS.get(str(row.get("deriv_status") or ""), "-")
-
-
 def render_table(rows: list[dict[str, Any]]) -> str:
     """Format candidates as an aligned table for the launcher console."""
     columns = [
         ("标的", "symbol", "left", lambda r: r["symbol"].replace("/USDT", "")),
         ("市场范围", "market_scope", "left", lambda r: r.get("market_scope", "-")),
-        ("合约数据", "deriv_status", "left", deriv_status_label),
         ("评分", "score", "right", lambda r: f"{r['score']}/{r.get('max_score', MAX_SCORE)}"),
         ("辅助", "extra_score", "right", lambda r: str(r.get("extra_score", 0))),
         ("命中", "conditions_met", "right", lambda r: str(r.get("conditions_met", 0))),
@@ -1218,11 +849,6 @@ def main() -> int:
         print(f"已尝试代理和直连。完整错误已保存到: {log_path}")
         print("请确认代理软件已启动，并开启系统代理或 TUN 模式。")
         return 1
-    if futures is None:
-        state = RateLimitState.load(default_state_path(cfg))
-        until = state.until(f"{FUTURES_DOMAIN}|{cfg.proxy or 'direct'}")
-        print("⚠ 合约数据当前不可用（连接失败或限流暂停"
-              + (f"至 {human_ts(until)}" if until else "") + "）：仅按现货量价评分，合约三项记为缺失。")
     while True:
         try:
             run_once(exchange, futures, cfg)
