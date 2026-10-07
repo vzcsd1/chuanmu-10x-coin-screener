@@ -403,10 +403,14 @@ class RateLimitState:
         if not (until_ms and until_ms > now):
             note = f"未解析到恢复时间，暂按 {DEFAULT_BAN_BACKOFF_MS // 60_000} 分钟退让；{note}"
         item = self.domains.setdefault(key, {})
-        item.update({"banned_until_ms": until,
+        # 期限只延长不缩短：同一域已有更晚的暂停时，短暂停不得把它提前放行
+        # （否则一次晚到的短 Retry-After 会让本应继续等待的出口提前重试）。
+        previous = int(item.get("banned_until_ms") or 0)
+        effective = max(previous, until)
+        item.update({"banned_until_ms": effective,
                      "paused_since_ms": item.get("paused_since_ms") or now,
                      "probe_at_ms": 0, "reason": note})
-        logging.warning("%s 被限流/封禁：暂停至 %s（%s）", key, human_ts(until), note)
+        logging.warning("%s 被限流/封禁：暂停至 %s（%s）", key, human_ts(effective), note)
         self.save()
 
     def mark_probe(self, key: str, now: int | None = None) -> None:
@@ -483,6 +487,7 @@ def _connect_domain(domain: str, default_type: str, cfg: Config, attempts: int,
         mode = f"代理 {candidate.proxy}" if candidate.proxy else "直连"
         guard = RequestGuard(state, candidate)
         key = guard.key(domain)
+        banned = False
         for attempt in range(1, attempts + 1):
             if not state.should_attempt(key):
                 logging.error("%s 在 %s 出口处于限流暂停期（至 %s），跳过连接",
@@ -500,13 +505,19 @@ def _connect_domain(domain: str, default_type: str, cfg: Config, attempts: int,
             except _LIMIT_ERRORS as exc:
                 last_error = exc
                 state.record_pause(key, parse_ban_until(exc), f"{type(exc).__name__}: {exc}")
-                logging.error("%s 在 %s 出口被封禁，停止对该出口重试", domain, mode)
+                logging.error("%s 在 %s 出口被封禁，停止对该出口重试，且不切换出口",
+                              domain, mode)
+                banned = True
                 break
             except Exception as exc:
                 last_error = exc
                 logging.warning("连接失败 %s (%d/%d): %s", mode, attempt, attempts, exc)
                 if attempt < attempts:
                     time.sleep(2)
+        if banned:
+            # 限流/封禁是按出口 IP 记的；换到另一个出口继续请求等于绕过封禁，
+            # 会让服务端看到更多违规、把短封拖成长封。只有网络类故障才允许回退。
+            break
     if required:
         assert last_error is not None
         raise last_error
@@ -851,7 +862,7 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
     spot_until = guard.state.until(guard.key(SPOT_DOMAIN))
     if spot_until and _now_ms() < spot_until:
         raise DomainPaused(f"现货域限流暂停中（至 {human_ts(spot_until)}），本轮跳过")
-    tickers = exchange.fetch_tickers()
+    tickers = guard.run(SPOT_DOMAIN, exchange.fetch_tickers)
     futures_tickers: dict[str, Any] = {}
     if futures is not None:
         try:

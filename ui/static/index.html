@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>观潮 · 个人选币工作台</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 20c5-6 9-6 14 0s9 6 14 0' fill='none' stroke='%234cc2bc' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css?v=3">
+</head>
+<body>
+
+<!-- 海面场景：WebGL 实时渲染；容器背景是静帧后备（无 WebGL 时可见） -->
+<canvas id="sea" aria-hidden="true"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+
+<div id="demo-banner" hidden>演示模式 · 数据为内置样例，不是实时查询</div>
+
+<!-- 入场舞台：标题与查询入口，短促显现，立即可操作 -->
+<header id="stage" class="stage">
+  <h1 class="stage-title">观潮</h1>
+  <p class="stage-sub">寻找值得继续研究的标的</p>
+  <button id="scan-btn-stage" class="btn-primary" type="button">
+    <span class="btn-label">查询标的</span>
+  </button>
+  <p class="stage-note">首次打开不会自动扫描市场</p>
+</header>
+
+<!-- 观测面板：深色半透明底，阅读稳定 -->
+<main id="panel" class="panel" hidden>
+  <div class="panel-head">
+    <span class="panel-brand">观潮</span>
+    <div class="panel-status">
+      <p id="status-line" class="status-line">待查询</p>
+      <p id="last-line" class="last-line">上次完成：—</p>
+    </div>
+    <button id="scan-btn" class="btn-primary btn-compact" type="button">
+      <span class="btn-label">查询标的</span>
+    </button>
+  </div>
+
+  <div class="progress" id="progress" hidden><div class="progress-bar"></div></div>
+  <div id="pause-badges" class="pause-badges"></div>
+  <div id="notice-area" aria-live="polite"></div>
+
+  <section class="results-head">
+    <h2 id="results-title">入选标的</h2>
+    <span id="results-badge" class="badge-stale" hidden>上次结果</span>
+    <span id="results-count" class="results-count"></span>
+    <input id="filter" type="search" placeholder="按币名过滤…" aria-label="按币名过滤">
+  </section>
+
+  <section id="results" class="results" aria-label="结果区"></section>
+
+  <section id="empty-state" class="empty-state" hidden>
+    <div class="empty-mark" aria-hidden="true"></div>
+    <p class="empty-title">这一轮暂未发现符合条件的标的</p>
+    <p class="empty-sub" id="empty-sub">候选池里没有币种达到评分门槛。潮水平静的时候也是常态。</p>
+  </section>
+
+  <section id="idle-state" class="empty-state" hidden>
+    <div class="empty-mark" aria-hidden="true"></div>
+    <p class="empty-title">还没有本轮结果</p>
+    <p class="empty-sub">点一下「查询标的」开始一轮真实扫描。</p>
+  </section>
+</main>
+
+<button id="motion-toggle" type="button" aria-pressed="true" title="暂停/恢复海面动态">静态</button>
+
+<footer class="site-foot">
+  <p>评分是规则得分，不是上涨概率 · 数据来自公开接口 · 指标含义见项目 LEARNING.md</p>
+</footer>
+
+<div id="toast" role="status" hidden></div>
+
+<script src="/static/ocean.js?v=4"></script>
+<script src="/static/app.js?v=3"></script>
+</body>
+</html>

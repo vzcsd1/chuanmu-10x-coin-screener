@@ -1,0 +1,12 @@
+﻿market,dataset,kind,era,candidates_in_pool,sampled,checked,statuses
+futures-cm,fundingRate,monthly,mid,,4,4,"{""ok"": 4}"
+futures-cm,fundingRate,monthly,new,,4,4,"{""ok"": 4}"
+futures-um,fundingRate,monthly,mid,,8,8,"{""ok"": 8}"
+futures-um,fundingRate,monthly,new,,4,4,"{""ok"": 4}"
+futures-um,fundingRate,monthly,old,,4,4,"{""ok"": 4}"
+futures-um,klines,daily,mid,,1,1,"{""ok"": 1}"
+futures-um,klines,monthly,mid,,4,4,"{""ok"": 4}"
+futures-um,metrics,daily,mid,,4,4,"{""ok"": 4}"
+futures-um,metrics,daily,old,,4,4,"{""ok"": 4}"
+spot,klines,daily,mid,,1,1,"{""ok"": 1}"
+spot,klines,monthly,mid,,4,4,"{""ok"": 4}"

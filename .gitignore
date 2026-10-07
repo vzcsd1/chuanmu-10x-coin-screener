@@ -14,3 +14,16 @@ connection-error.log
 results/rate_limit_state.json
 results/coingecko_caps.json
 results/*.tmp
+
+# AI 工具临时产物
+.trae-html-share-packages/
+
+# reports/ 默认只入库文字证据（.md）与小型审计 CSV；
+# 清单分片/队列/运行日志/视频素材体积巨大且 Grok 阅读不需要
+reports/**
+!reports/**/
+!reports/**/*.md
+!reports/archive_content_audit_glm/**
+!reports/live_futures_glm/**
+!reports/archive_download_ds/**
+!reports/ocean_v2/assets/frames/**

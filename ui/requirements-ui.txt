@@ -1,0 +1,3 @@
+# 观潮工作台独立依赖（不改原 requirements）
+# 安装：py -3.10 -m pip install -r ui\requirements-ui.txt
+flask>=3.0,<4.0

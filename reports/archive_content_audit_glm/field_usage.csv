@@ -1,0 +1,15 @@
+﻿dataset,field,sample_evidence,unit_evidence,used_by,current_role,mechanism_note,status
+klines,col5 volume,现货/合约 K 线第 6 列,推断为基础币数量；**本轮未取官方文档，待核实**,binance_box_strategy.py:318 量比; research/03_build_features.py:198-204,量比/量增评分输入（当前在用）,[假设] 与报价额分离可识别控盘小币刷量结构,假设；单位待核实
+klines,col7 quote_volume,第 8 列,推断为报价币计；**待核实**,research/03_build_features.py:224,流动性分档（当前在用）,[假设] volume 与 quote_volume 背离可识别刷量,假设；单位待核实
+klines,col9-10 taker_buy_base/quote,第 10-11 列,推断为主动买入（基础币/报价币）；**待核实**,现有研究未读取（全库检索无 taker 引用）,未用,"[假设] 洗盘回拉前主动买压占比先反转；启动前 72h 主动买入抬升。最小验证：本地 1h 对 1,402 事件 pre_day 前 72h vs 同币对照期；注意 2025 测试集已被规则选择使用，验证须用冻结后的新时期数据",假设；单位待核实
+klines,col8 trades,第 9 列,笔数；**待核实**（是否含拆单）,现有研究未读取,未用,[假设] 笔均单量变化 = 大户参与度；单字段不下结论,假设；单位待核实
+metrics,sum_open_interest,表头命名,推断为持仓数量（U 本位为基础币，币本位为该币计）；**待核实**,"research/05_deriv_features.py:44,88 存为 oi_amt_last；评分未用",存储未用于结论,[假设] 数量/金额背离可分离『真增仓』与『价格推高』；检验必须引入价格对照，比值单独不能定论,假设；单位待核实
+metrics,sum_open_interest_value,表头命名,持仓价值；U 本位为 USDT 计（推断，待核实）,research/05_deriv_features.py:86-88; binance_box_strategy.py:445-449,OI 增速评分唯一来源（当前在用）,[事实] 评分链只用金额口径；价格波动计入 OI 增速为 STRATEGY_REVIEW 第 2 节已标注的既有判断,确认（代码）；单位待核实
+metrics,count_toptrader_long_short_ratio,表头命名,大户账户数比（推断）；**待核实**,research/05_deriv_features.py:45 存为 ls_count；未用于任何结论,存储未用,[假设] 账户数与持仓比背离可区分『户数挤兑』与『仓位集中』,假设；语义待核实
+metrics,sum_toptrader_long_short_ratio,表头命名,大户持仓比——2026-10-04 已与在线 topLongShortPositionRatio 同源实测（BTC 1.8094 vs 全市场 1.2252，见 MEMORY）,"research/05_deriv_features.py:46,92-93; binance_box_strategy.py:454-498",大户持仓多空比评分来源（当前在用）,口径勿与账户数比混用（既有教训 +7.7pp→+0.6pp）,确认（同源实测）
+metrics,count_long_short_ratio,表头命名,全市场账户数比（推断）；**待核实**,research/05_deriv_features.py:47 存为 ls_count_last/mean；未用,存储未用,[事实] 散户账户口径曾致 +7.7pp 误判（KNOWLEDGE 3.2）；仅作对照,确认（教训在案）
+metrics,sum_taker_long_short_vol_ratio,表头命名,主动买卖量比；**待核实**,research/05_deriv_features.py:47-48 存为 taker；未用于任何结论,存储未用,[假设] 洗盘回拉前 taker 买卖比先反转；与 K 线 taker 字段交叉验证；验证须用冻结后新时期数据,假设；单位待核实
+metrics,create_time,表头命名；**实测存在毫秒与字符串两种格式**（2021-07~2022-12 部分文件为字符串，本轮 8/42 样本）,毫秒时间戳 或 'YYYY-MM-DD HH:MM:SS' 字符串（样本证据）,research/05_deriv_features.py:86 取当日最后一行，**不读该列本身**,日末快照,[事实] 『日末』取数使日内洗盘路径不可见；5 分钟粒度保留在原始文件；未来日内研究须双格式兼容,确认（样本）
+fundingRate,last_funding_rate,表头命名,小数（-0.000125 = -0.0125%；样本证据）,research/05_deriv_features.py:120-133 解析；评分未用（实测噪音）,未用,[事实] 负费率合法（样本 653 行）；费率由负转正被 841 样本否定，不作门槛,确认（样本）
+fundingRate,funding_interval_hours,表头命名（部分文件出现）,小时数（推断 4/8）；**语义与出现范围待核实**,现有解析保留列但未用,未用,[假设] 结算频率变化影响费率累积速度；跨期比较需归一,假设；语义待核实
+fundingRate,calc_time/time,表头或无表头首列,毫秒（样本证据）；是否存在字符串变体**待核实**,research/05_deriv_features.py:129-131 首行推断单位,结算时间,[事实] 首行推断与 K 线同款风险（混合文件会错读）；funding 内部混用未见样本,确认（代码风险）；变体待核实
