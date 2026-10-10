@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "captured_at_utc": "2026-10-08T12:24:44.326194+00:00",
+  "source_path": "results\\ui\\last_result.json",
+  "source_sha256": "9ba8b1668509855bf37ba20e5912dba352b5478b884c49646b1e410bc3e63d80",
+  "scan_started_at_ms": 1791460843773,
+  "scan_finished_at_ms": 1791460977262,
+  "scan_finished_at_beijing": "2026-10-08T20:02:57.262000+08:00",
+  "candidate_count": 71,
+  "preservation": "Exact source bytes; no network and no rescoring.",
+  "historical_runtime_config": null,
+  "code_sha256_observed_at_capture": {
+    "binance_box_strategy.py": "d1cc20d875a991b87b476aba9736fba449a9bd9351a20b17d0be16aa5ea80826",
+    "川沐十倍币筛选.py": "779b01b01552904fcd6458a95fc39c0bf1d222dd75f910425e63f7bf4f8177a1",
+    "ui/app.py": "88579ddc72c9ecc4341ad757ff9734a9a5887455f93638b946f993e8ae3857e6"
+  },
+  "code_hash_caveat": "Hashes describe files observed at capture, not proof of code loaded by the earlier scan process.",
+  "limitations": [
+    "Only passing rows were persisted by the UI; nonpassing scores and input candles were not saved.",
+    "Scope symbols and skip reasons are preserved if present in the source round summary.",
+    "Entry field is a scanner reference, not a verified post-result executable price.",
+    "Follow-up windows, sampling rules and confirmation eligibility have not been finalized."
+  ]
+}

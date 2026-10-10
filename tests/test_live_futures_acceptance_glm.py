@@ -167,12 +167,12 @@ def scan_module():
     return SCAN_MOD
 
 
-def run_scan(spot, futures, cfg, okx=None):
+def run_scan(spot, futures, cfg, okx=None, round_stats=None):
     """走真实 川沐十倍币筛选.scan()：只 patch 连接与 OKX 两个入口，不复制筛选逻辑。"""
     mod = scan_module()
     with patch.object(base, "connect_exchanges", return_value=(spot, futures, cfg)), \
             patch.object(base, "okx_exchange", side_effect=RuntimeError("测试离线")):
-        rows = mod.scan(cfg)
+        rows = mod.scan(cfg, round_stats=round_stats)
     return rows
 
 
@@ -184,6 +184,12 @@ def ui_snapshot(scan_fn, tmp: Path):
         manager = ui_app.ScanManager(scan_fn, tmp / "last_result.json")
         manager._run()  # 直接同步执行，避免线程时序
         return manager.snapshot()
+
+
+def ui_scan(spot, fut, cfg, stats):
+    """模拟 ui.real_scan 完整链路：scan() 填 stats，返回 {"rows","round"} 载荷。"""
+    rows = run_scan(spot, fut, cfg, round_stats=stats)
+    return {"rows": rows, "round": stats}
 
 
 class LiveFuturesAcceptanceTests(TestCase):
@@ -269,18 +275,21 @@ class LiveFuturesAcceptanceTests(TestCase):
             self.assertEqual(row["score_deriv"], 7)
             self.assertEqual(row["score"], 13)
 
-    # ---------- S3b 回退口径仍参与计分（对照 REASONING C4 的宣称） ----------
+    # ---------- S3b 回退口径（R2 修复后的回归钉，2026-10-07 更新） ----------
     def test_s3b_fallback_caliber_scores(self):
+        """R2 前此测试钉住的是**缺陷行为**（回退值偷拿 ls_top 3 分）；修复后改为
+        钉住正确行为：回退只展示、不加分。详见 R2FallbackScoringTests 与
+        reports/live_futures_glm/r2/。"""
         with TemporaryDirectory() as td:
             tmp = Path(td)
             spot = FakeSpot({"DOGE/USDT": rising_klines()})
             fut = FakeFutures(ls_fail=True, ls_fallback=ls_hist(ratio=0.9))
             row = run_scan(spot, fut, make_cfg(tmp))[0]
-            self.assertEqual(row["ls_source"], "globalLongShortAccountRatio(回退口径)")
+            self.assertEqual(row["ls_source"], "globalLongShortAccountRatio(回退,仅展示)")
             self.assertEqual(row["deriv_status"], "partial")
-            # 证据：回退值 0.9<1 确实拿到了 ls_top 的 3 分（0+4+3+3=10）
-            self.assertEqual(row["score_deriv"], 10)
-            self.assertEqual(row["score"], 16)
+            self.assertNotIn("ls_top", row)     # 不再冒充大户持仓比
+            self.assertEqual(row["score_deriv"], 7)  # 无回退 3 分
+            self.assertEqual(row["score"], 13)
 
     # ---------- S4 真实无合约 vs 断供：标签相同 ----------
     def test_s4_no_futures_label_identical_to_outage(self):
@@ -469,6 +478,277 @@ class LiveFuturesAcceptanceTests(TestCase):
             # 第二遍补取只对过门槛行：OI 快照 + 资金费率 × 3 币
             self.assertEqual(fut.snapshot_calls, 3)
             self.assertEqual(fut.funding_calls, 3)
+
+
+class R2FallbackScoringTests(TestCase):
+    """tasks/live_futures_r2.md glm-1：回退口径只能展示，不占 ls_top 计分。"""
+
+    def test_r2_fallback_display_only_not_scored(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            fut = FakeFutures(ls_fail=True, ls_fallback=ls_hist(ratio=0.9))
+            row = run_scan(spot, fut, make_cfg(tmp))[0]
+            self.assertEqual(row["deriv_status"], "partial")
+            # ls_top 键必须缺席——回退值不得冒充大户持仓比
+            self.assertNotIn("ls_top", row)
+            # 回退值保留为展示字段，来源可解释
+            self.assertEqual(row.get("ls_global"), 0.9)
+            self.assertEqual(row["ls_source"], "globalLongShortAccountRatio(回退,仅展示)")
+            # 不加分：K 线 6 + OI 4+3 = 13（修复前回退偷拿 3 分=16）
+            self.assertEqual(row["score_deriv"], 7)
+            self.assertEqual(row["score"], 13)
+
+    def test_r2_real_top_ratio_still_scores(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            fut = FakeFutures()  # 真实大户持仓口径 0.9
+            row = run_scan(spot, fut, make_cfg(tmp))[0]
+            self.assertEqual(row["ls_top"], 0.9)
+            self.assertEqual(row["ls_source"], "topLongShortPositionRatio")
+            self.assertEqual(row["score_deriv"], 10)  # OI 4+3 + 大户持仓多空比 3
+            # ls_global 键恒在：真实口径下为 null（与 ls_source 同一形态，前端好处理）
+            self.assertIsNone(row.get("ls_global"))
+
+
+class R2RoundSummaryTests(TestCase):
+    """tasks/live_futures_r2.md glm-2/3/4：整轮摘要、三态表达、as_of_min。"""
+
+    def _stats(self):
+        return {"kind": "round_summary"}
+
+    def test_r2_summary_complete_round(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"A/USDT": rising_klines(), "B/USDT": rising_klines()})
+            fut = FakeFutures(symbols=("A/USDT:USDT", "B/USDT:USDT"))
+            stats = self._stats()
+            run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            self.assertTrue(stats["task_completed"])
+            self.assertEqual(stats["scope_total"], 2)
+            self.assertEqual(stats["futures_expected"], 2)
+            self.assertEqual(stats["futures_fetched_ok"], 2)
+            self.assertEqual(stats["deriv_counts"]["ok"], 2)
+            self.assertEqual(stats["deriv_domain_state"], "ok")
+            self.assertTrue(stats["data_complete"])
+            self.assertTrue(stats["has_passing"])
+            self.assertEqual(stats["chosen_count"], 2)
+            self.assertEqual(stats["errors"], 0)
+            self.assertEqual(stats["skipped_short_history"], 0)
+            self.assertEqual(stats["as_of_min"], T0 + 199 * HOUR)
+
+    def test_r2_summary_no_client_expected_unknown(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            stats = self._stats()
+            run_scan(spot, None, make_cfg(tmp), round_stats=stats)
+            # 合约市场列表拿不到 → 应有合约数未知，不能填 0 并称齐全
+            self.assertIsNone(stats["futures_expected"])
+            self.assertEqual(stats["deriv_domain_state"], "no_client")
+            self.assertFalse(stats["data_complete"])
+            self.assertEqual(stats["deriv_counts"]["no_futures"], 1)
+
+    def test_r2_summary_mid_scan_pause(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"A/USDT": rising_klines(), "B/USDT": rising_klines(),
+                             "C/USDT": flat_klines()})
+            fut = FakeFutures(symbols=("A/USDT:USDT", "B/USDT:USDT", "C/USDT:USDT"),
+                              oi_fail_on_call=2)
+            stats = self._stats()
+            run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            self.assertEqual(stats["scope_total"], 3)
+            self.assertEqual(stats["futures_expected"], 3)
+            self.assertEqual(stats["futures_fetched_ok"], 1)
+            self.assertEqual(stats["deriv_domain_state"], "paused")
+            self.assertFalse(stats["data_complete"])
+            self.assertTrue(stats["has_passing"])
+
+    def test_r2_complete_data_no_candidates_is_normal(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": flat_klines()})
+            fut = FakeFutures(oi=oi_hist(growth=0.0), ls=ls_hist(ratio=1.5))
+            stats = self._stats()
+            rows = run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            self.assertEqual(rows, [])
+            self.assertTrue(stats["data_complete"])
+            self.assertFalse(stats["has_passing"])
+            self.assertEqual(stats["chosen_count"], 0)
+
+    def test_r2_cards_look_complete_but_dropped_coin_hidden(self):
+        """用户核心场景：可见卡片字段全齐，落选币的缺数据只有摘要能暴露。"""
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"A/USDT": rising_klines(), "B/USDT": rising_klines(),
+                             "C/USDT": flat_klines()})
+            # 故障点在第 3 次 OI 请求（C 的）：A/B 两个可见卡全 ok，C 被暂停后落选
+            fut = FakeFutures(symbols=("A/USDT:USDT", "B/USDT:USDT", "C/USDT:USDT"),
+                              oi_fail_on_call=3)
+            stats = {"kind": "round_summary"}
+            snap = ui_snapshot(lambda: ui_scan(spot, fut, make_cfg(tmp), stats), tmp)
+            # 页面上的卡片确实"字段齐全"且全是 ok——单看卡片发现不了问题
+            self.assertEqual(snap["status"], "success")
+            for r in snap["rows"]:
+                self.assertEqual(r["deriv_status"], "ok")
+            # 摘要揭示被隐藏的落选缺数据
+            self.assertEqual(stats["futures_fetched_ok"], 2)
+            self.assertEqual(stats["futures_expected"], 3)
+            self.assertFalse(stats["data_complete"])
+            self.assertEqual(snap.get("round_quality"), "incomplete")
+            self.assertEqual(snap["round"]["deriv_counts"]["paused"], 1)
+
+    def test_r2_all_coins_failed_is_incomplete_not_empty(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()},
+                            ohlcv_fail={"DOGE/USDT": RuntimeError("模拟网络故障")})
+            stats = {"kind": "round_summary"}
+            snap = ui_snapshot(lambda: ui_scan(spot, FakeFutures(), make_cfg(tmp), stats),
+                               tmp)
+            self.assertEqual(snap["status"], "empty")  # 行数 0 的既有状态机
+            self.assertGreaterEqual(stats["errors"], 1)
+            self.assertFalse(stats["data_complete"])
+            self.assertEqual(snap.get("round_quality"), "incomplete")
+
+    def test_r2_as_of_min_not_max(self):
+        """R2 原钉：as_of 不得掩盖陈旧 OI。R3 细化为**逐字段**时间——
+        as_of_min 取所有字段实际采用时间的最小值（本夹具 LS 只有 100 根，
+        比 OI 的 169h 更旧，故最小值是 99h）；字段级时间由 oi/ls_as_of_min 表达。"""
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            # A 的 OI 尾部 30h 全零（实际止于 169h）；B 数据新鲜
+            spot = FakeSpot({"A/USDT": rising_klines(), "B/USDT": rising_klines()})
+            fut = FakeFutures(
+                symbols=("A/USDT:USDT", "B/USDT:USDT"),
+                oi=oi_hist(growth=0.005, tail_zeros=30), ls=ls_hist(n=100))
+            stats = {"kind": "round_summary"}
+            run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            self.assertEqual(stats["oi_as_of_min"], T0 + (200 - 30 - 1) * HOUR)
+            self.assertEqual(stats["ls_as_of_min"], T0 + 99 * HOUR)
+            self.assertEqual(stats["as_of_min"], T0 + 99 * HOUR)  # 跨字段最小，不被掩盖
+
+    def test_r2_backward_compat_without_stats(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            fut = FakeFutures()
+            cfg = make_cfg(tmp)
+            # 不传 round_stats：public_selection / scan 返回约定完全不变
+            ranked = base.public_selection(spot, fut, cfg, None)
+            self.assertIsInstance(ranked, list)
+            rows = run_scan(spot, fut, make_cfg(tmp / "b"))
+            self.assertIsInstance(rows, list)
+            # UI 旧载荷（list）仍兼容
+            snap = ui_snapshot(lambda: rows, tmp / "c")
+            self.assertEqual(snap["status"], "success")
+            self.assertIsNone(snap.get("round"))
+
+
+class R2UiPayloadTests(TestCase):
+    """glm-3：ScanManager 接受 {rows, round} 载荷；round_quality 三态。"""
+
+    def test_ui_dict_payload_with_round(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            payload = {"rows": [{"symbol": "DOGE/USDT", "score": 6}],
+                       "round": {"task_completed": True, "data_complete": True,
+                                 "has_passing": True, "futures_expected": 1,
+                                 "futures_fetched_ok": 1, "errors": 0}}
+            snap = ui_snapshot(lambda: payload, tmp)
+            self.assertEqual(snap["status"], "success")
+            self.assertEqual(snap["rows"][0]["symbol"], "DOGE/USDT")
+            self.assertEqual(snap["round_quality"], "complete")
+            self.assertEqual(snap["round"]["futures_expected"], 1)
+
+    def test_ui_dict_payload_incomplete(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            payload = {"rows": [{"symbol": "DOGE/USDT", "score": 6}],
+                       "round": {"task_completed": True, "data_complete": False,
+                                 "has_passing": True, "futures_expected": 3,
+                                 "futures_fetched_ok": 1, "errors": 0}}
+            snap = ui_snapshot(lambda: payload, tmp)
+            self.assertEqual(snap["status"], "success")
+            self.assertEqual(snap["round_quality"], "incomplete")
+
+    def test_ui_old_list_payload_round_unknown(self):
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            snap = ui_snapshot(lambda: [{"symbol": "X/USDT", "score": 1}], tmp)
+            self.assertEqual(snap["round_quality"], "unknown")
+
+
+class R3FieldCompletenessTests(TestCase):
+    """R3（reports/live_futures_r2_final_review.md）：完整性必须核对每个评分所需
+    字段是否可计算及其**实际采用的数据时间**，不能只数 status=ok，
+    也不能对取过最大值的时间再取最小值。"""
+
+    def test_r3_short_oi_history_is_not_ok(self):
+        """反例1：OI 只有 40 根小时数据 → 算不出 3 日变化，不得 ok/不得宣称完整。"""
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            fut = FakeFutures(oi=oi_hist(n=40), ls=ls_hist())
+            stats = {"kind": "round_summary"}
+            rows = run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            row = rows[0]
+            self.assertNotIn("oi_chg_3d", row)          # 三日变化确实不可计算
+            self.assertEqual(row["deriv_status"], "partial")  # 不得 ok（1d 可算、3d 不可算）
+            self.assertFalse(stats["data_complete"])     # 整轮不得宣称完整
+            self.assertEqual(stats["futures_fetched_ok"], 0)
+
+    def test_r3_trailing_zero_oi_not_masked_by_fresh_ls(self):
+        """反例2：OI 尾部 30 小时合法零值被过滤 → 实际用 169h 前的旧数据；
+        较新的 LS 时间不得掩盖它，整轮不得显示完整。"""
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            fut = FakeFutures(oi=oi_hist(growth=0.005, tail_zeros=30), ls=ls_hist())
+            stats = {"kind": "round_summary"}
+            rows = run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            row = rows[0]
+            # 字段都可计算（合法零值≠失败），但必须保留各自实际采用的数据时间
+            self.assertEqual(row.get("oi_as_of"), T0 + (200 - 30 - 1) * HOUR)
+            self.assertEqual(row.get("ls_as_of"), T0 + 199 * HOUR)
+            self.assertFalse(stats["data_complete"])     # 最新观测不可用作基点 → 标不完整
+            # 摘要的时间取“各字段实际采用时间”的最小值，不得被较新 LS 掩盖
+            self.assertEqual(stats["as_of_min"], T0 + (200 - 30 - 1) * HOUR)
+            self.assertEqual(stats["oi_as_of_min"], T0 + (200 - 30 - 1) * HOUR)
+            self.assertEqual(stats["ls_as_of_min"], T0 + 199 * HOUR)
+            self.assertGreaterEqual(stats.get("stale_rows", 0), 1)
+
+    def test_r3_normal_complete_sample_unchanged(self):
+        """正常完整样本：评分、排序、入选集合保持不变（回退误计分修复除外，已另行钉住）。"""
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"A/USDT": rising_klines(), "B/USDT": rising_klines()})
+            fut = FakeFutures(symbols=("A/USDT:USDT", "B/USDT:USDT"))
+            stats = {"kind": "round_summary"}
+            rows = run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            self.assertEqual([r["symbol"] for r in rows], ["A/USDT", "B/USDT"])
+            self.assertTrue(all(r["deriv_status"] == "ok" for r in rows))
+            self.assertTrue(all(r["score"] == 16 for r in rows))
+            self.assertTrue(stats["data_complete"])
+            self.assertEqual(stats["as_of_min"], T0 + 199 * HOUR)
+            self.assertEqual(stats["stale_rows"], 0)
+
+    def test_r3_inner_zeros_do_not_break_completeness(self):
+        """序列中部的合法零值被过滤不影响完整性——计算基点仍是最新的可用观测。"""
+        with TemporaryDirectory() as td:
+            tmp = Path(td)
+            spot = FakeSpot({"DOGE/USDT": rising_klines()})
+            oi = oi_hist(growth=0.005)
+            for item in oi[100:110]:  # 中部 10 根零值
+                item["sumOpenInterestValue"] = 0
+            fut = FakeFutures(oi=oi, ls=ls_hist())
+            stats = {"kind": "round_summary"}
+            run_scan(spot, fut, make_cfg(tmp), round_stats=stats)
+            self.assertTrue(stats["data_complete"])
+            self.assertEqual(stats["stale_rows"], 0)
+            self.assertEqual(stats["oi_as_of_min"], T0 + 199 * HOUR)
 
 
 if __name__ == "__main__":

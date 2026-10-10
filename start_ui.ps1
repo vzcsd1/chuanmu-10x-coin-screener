@@ -1,4 +1,5 @@
-# 观潮 · 个人选币工作台 —— 启动脚本
+﻿# 观潮 · 个人选币工作台 —— 启动脚本
+# Keep UTF-8 with BOM for Windows PowerShell 5.1.
 # 用法：在本目录的 PowerShell 里执行：
 #   powershell -ExecutionPolicy Bypass -File .\start_ui.ps1          # 真实模式
 #   powershell -ExecutionPolicy Bypass -File .\start_ui.ps1 -Demo    # 演示模式（内置样例）

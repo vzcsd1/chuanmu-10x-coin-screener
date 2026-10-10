@@ -1,0 +1,2363 @@
+{
+  "derived_from": "scan.json",
+  "inference": "not_selected = original symbols_scope minus saved selected rows minus recorded skip symbols; scores are unknown for these objects.",
+  "summary": {
+    "selected": 71,
+    "not_selected": 204,
+    "skipped": 61
+  },
+  "rows": [
+    {
+      "symbol": "MET/USDT",
+      "scope_position": 0,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 13
+    },
+    {
+      "symbol": "SAND/USDT",
+      "scope_position": 1,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SNDKB/USDT",
+      "scope_position": 2,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "WLD/USDT",
+      "scope_position": 3,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RAY/USDT",
+      "scope_position": 4,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "SPCXB/USDT",
+      "scope_position": 5,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "U/USDT",
+      "scope_position": 6,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "PEPE/USDT",
+      "scope_position": 7,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ORCA/USDT",
+      "scope_position": 8,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "PAXG/USDT",
+      "scope_position": 9,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "STRK/USDT",
+      "scope_position": 10,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "FET/USDT",
+      "scope_position": 11,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "EUR/USDT",
+      "scope_position": 12,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "CRCLB/USDT",
+      "scope_position": 13,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "OGN/USDT",
+      "scope_position": 14,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 18
+    },
+    {
+      "symbol": "ZRO/USDT",
+      "scope_position": 15,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PROM/USDT",
+      "scope_position": 16,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "JUP/USDT",
+      "scope_position": 17,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 13
+    },
+    {
+      "symbol": "ALGO/USDT",
+      "scope_position": 18,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 13
+    },
+    {
+      "symbol": "W/USDT",
+      "scope_position": 19,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 13
+    },
+    {
+      "symbol": "HEMI/USDT",
+      "scope_position": 20,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "PENGU/USDT",
+      "scope_position": 21,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MSTRB/USDT",
+      "scope_position": 22,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "FIL/USDT",
+      "scope_position": 23,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ARB/USDT",
+      "scope_position": 24,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TRUMP/USDT",
+      "scope_position": 25,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MARSCOIN/USDT",
+      "scope_position": 26,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MINA/USDT",
+      "scope_position": 27,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 7
+    },
+    {
+      "symbol": "CRV/USDT",
+      "scope_position": 28,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "INJ/USDT",
+      "scope_position": 29,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RLC/USDT",
+      "scope_position": 30,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "MOVR/USDT",
+      "scope_position": 31,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "APT/USDT",
+      "scope_position": 32,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "币安人生/USDT",
+      "scope_position": 33,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "DOT/USDT",
+      "scope_position": 34,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "POL/USDT",
+      "scope_position": 35,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ASTER/USDT",
+      "scope_position": 36,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NMR/USDT",
+      "scope_position": 37,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GTC/USDT",
+      "scope_position": 38,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "JTO/USDT",
+      "scope_position": 39,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "TIA/USDT",
+      "scope_position": 40,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 9
+    },
+    {
+      "symbol": "MUB/USDT",
+      "scope_position": 41,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "TON/USDT",
+      "scope_position": 42,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "ACE/USDT",
+      "scope_position": 43,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DASH/USDT",
+      "scope_position": 44,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NVDAB/USDT",
+      "scope_position": 45,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ICP/USDT",
+      "scope_position": 46,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ETHFI/USDT",
+      "scope_position": 47,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "OP/USDT",
+      "scope_position": 48,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ERA/USDT",
+      "scope_position": 49,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 13
+    },
+    {
+      "symbol": "MUBARAK/USDT",
+      "scope_position": 50,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "XPL/USDT",
+      "scope_position": 51,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GLMR/USDT",
+      "scope_position": 52,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "JST/USDT",
+      "scope_position": 53,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RENDER/USDT",
+      "scope_position": 54,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SKHYB/USDT",
+      "scope_position": 55,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "CHIP/USDT",
+      "scope_position": 56,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "牛来/USDT",
+      "scope_position": 57,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "CAKE/USDT",
+      "scope_position": 58,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "QQQB/USDT",
+      "scope_position": 59,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "WLFI/USDT",
+      "scope_position": 60,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "LDO/USDT",
+      "scope_position": 61,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SEI/USDT",
+      "scope_position": 62,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "VIRTUAL/USDT",
+      "scope_position": 63,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SNXXB/USDT",
+      "scope_position": 64,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "KORUB/USDT",
+      "scope_position": 65,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SKY/USDT",
+      "scope_position": 66,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SOXLB/USDT",
+      "scope_position": 67,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AERO/USDT",
+      "scope_position": 68,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LAZIO/USDT",
+      "scope_position": 69,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "STX/USDT",
+      "scope_position": 70,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "PENDLE/USDT",
+      "scope_position": 71,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ATOM/USDT",
+      "scope_position": 72,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "WBTC/USDT",
+      "scope_position": 73,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ZAMA/USDT",
+      "scope_position": 74,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BEAMX/USDT",
+      "scope_position": 75,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NFP/USDT",
+      "scope_position": 76,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "BOME/USDT",
+      "scope_position": 77,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "PLUME/USDT",
+      "scope_position": 78,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "AXS/USDT",
+      "scope_position": 79,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MANA/USDT",
+      "scope_position": 80,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PYTH/USDT",
+      "scope_position": 81,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 7
+    },
+    {
+      "symbol": "RAD/USDT",
+      "scope_position": 82,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "API3/USDT",
+      "scope_position": 83,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BONK/USDT",
+      "scope_position": 84,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BNCB/USDT",
+      "scope_position": 85,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TRB/USDT",
+      "scope_position": 86,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SAGA/USDT",
+      "scope_position": 87,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NIGHT/USDT",
+      "scope_position": 88,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ZEN/USDT",
+      "scope_position": 89,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SYN/USDT",
+      "scope_position": 90,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 14
+    },
+    {
+      "symbol": "RUNE/USDT",
+      "scope_position": 91,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AR/USDT",
+      "scope_position": 92,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ATM/USDT",
+      "scope_position": 93,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ETC/USDT",
+      "scope_position": 94,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "INTCB/USDT",
+      "scope_position": 95,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ORDI/USDT",
+      "scope_position": 96,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MORPHO/USDT",
+      "scope_position": 97,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "WIN/USDT",
+      "scope_position": 98,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "PHA/USDT",
+      "scope_position": 99,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "IO/USDT",
+      "scope_position": 100,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "EIGEN/USDT",
+      "scope_position": 101,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "HFT/USDT",
+      "scope_position": 102,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "VANRY/USDT",
+      "scope_position": 103,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "PARTI/USDT",
+      "scope_position": 104,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "CVX/USDT",
+      "scope_position": 105,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "NIL/USDT",
+      "scope_position": 106,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LPT/USDT",
+      "scope_position": 107,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "GALA/USDT",
+      "scope_position": 108,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BIO/USDT",
+      "scope_position": 109,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GIGGLE/USDT",
+      "scope_position": 110,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GOOGLB/USDT",
+      "scope_position": 111,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AVGOB/USDT",
+      "scope_position": 112,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SOXSB/USDT",
+      "scope_position": 113,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "SENT/USDT",
+      "scope_position": 114,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "WIF/USDT",
+      "scope_position": 115,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ARK/USDT",
+      "scope_position": 116,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "CFG/USDT",
+      "scope_position": 117,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ENS/USDT",
+      "scope_position": 118,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TSLAB/USDT",
+      "scope_position": 119,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TUT/USDT",
+      "scope_position": 120,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ONE/USDT",
+      "scope_position": 121,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "OPN/USDT",
+      "scope_position": 122,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "CTSI/USDT",
+      "scope_position": 123,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "DEXE/USDT",
+      "scope_position": 124,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "EDU/USDT",
+      "scope_position": 125,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "FORM/USDT",
+      "scope_position": 126,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "0G/USDT",
+      "scope_position": 127,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "FLOKI/USDT",
+      "scope_position": 128,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BFUSD/USDT",
+      "scope_position": 129,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ENJ/USDT",
+      "scope_position": 130,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MRVLB/USDT",
+      "scope_position": 131,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "2Z/USDT",
+      "scope_position": 132,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RNDR/USDT",
+      "scope_position": 133,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "COMP/USDT",
+      "scope_position": 134,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "OPEN/USDT",
+      "scope_position": 135,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "COCOS/USDT",
+      "scope_position": 136,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "INIT/USDT",
+      "scope_position": 137,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "C98/USDT",
+      "scope_position": 138,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ZK/USDT",
+      "scope_position": 139,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SCRT/USDT",
+      "scope_position": 140,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "BANK/USDT",
+      "scope_position": 141,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "POLY/USDT",
+      "scope_position": 142,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "UMA/USDT",
+      "scope_position": 143,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "S/USDT",
+      "scope_position": 144,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NOM/USDT",
+      "scope_position": 145,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ALPINE/USDT",
+      "scope_position": 146,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "WBETH/USDT",
+      "scope_position": 147,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ESP/USDT",
+      "scope_position": 148,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MEGA/USDT",
+      "scope_position": 149,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AVNT/USDT",
+      "scope_position": 150,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "MITO/USDT",
+      "scope_position": 151,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SANTOS/USDT",
+      "scope_position": 152,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "KAITO/USDT",
+      "scope_position": 153,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SYRUP/USDT",
+      "scope_position": 154,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LSK/USDT",
+      "scope_position": 155,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SUPER/USDT",
+      "scope_position": 156,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "FTM/USDT",
+      "scope_position": 157,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "TQQQB/USDT",
+      "scope_position": 158,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GAL/USDT",
+      "scope_position": 159,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "OG/USDT",
+      "scope_position": 160,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NEIRO/USDT",
+      "scope_position": 161,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PORTO/USDT",
+      "scope_position": 162,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "COTI/USDT",
+      "scope_position": 163,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "VET/USDT",
+      "scope_position": 164,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AAPLB/USDT",
+      "scope_position": 165,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "FIDA/USDT",
+      "scope_position": 166,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "GRT/USDT",
+      "scope_position": 167,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "OMNI/USDT",
+      "scope_position": 168,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "CYBER/USDT",
+      "scope_position": 169,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 11
+    },
+    {
+      "symbol": "TOMO/USDT",
+      "scope_position": 170,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "SCR/USDT",
+      "scope_position": 171,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MATIC/USDT",
+      "scope_position": 172,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "BERA/USDT",
+      "scope_position": 173,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RESOLV/USDT",
+      "scope_position": 174,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GENIUS/USDT",
+      "scope_position": 175,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "SAHARA/USDT",
+      "scope_position": 176,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AAOIB/USDT",
+      "scope_position": 177,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AEVO/USDT",
+      "scope_position": 178,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "VIC/USDT",
+      "scope_position": 179,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "IOTA/USDT",
+      "scope_position": 180,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "KITE/USDT",
+      "scope_position": 181,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TVK/USDT",
+      "scope_position": 182,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "BABAB/USDT",
+      "scope_position": 183,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "FLOW/USDT",
+      "scope_position": 184,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LUNC/USDT",
+      "scope_position": 185,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BAT/USDT",
+      "scope_position": 186,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "MAGIC/USDT",
+      "scope_position": 187,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BAR/USDT",
+      "scope_position": 188,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "XTZ/USDT",
+      "scope_position": 189,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "NBISB/USDT",
+      "scope_position": 190,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TREE/USDT",
+      "scope_position": 191,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "CBRSB/USDT",
+      "scope_position": 192,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "IRENB/USDT",
+      "scope_position": 193,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "STG/USDT",
+      "scope_position": 194,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "AMDB/USDT",
+      "scope_position": 195,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "EOS/USDT",
+      "scope_position": 196,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "JUV/USDT",
+      "scope_position": 197,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "KAIA/USDT",
+      "scope_position": 198,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "WAL/USDT",
+      "scope_position": 199,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DYDX/USDT",
+      "scope_position": 200,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LOKA/USDT",
+      "scope_position": 201,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "STORJ/USDT",
+      "scope_position": 202,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "QI/USDT",
+      "scope_position": 203,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BNSOL/USDT",
+      "scope_position": 204,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BB/USDT",
+      "scope_position": 205,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BROCCOLI714/USDT",
+      "scope_position": 206,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BLZ/USDT",
+      "scope_position": 207,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "TST/USDT",
+      "scope_position": 208,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "HIFI/USDT",
+      "scope_position": 209,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "EWYB/USDT",
+      "scope_position": 210,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "APE/USDT",
+      "scope_position": 211,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "HYPER/USDT",
+      "scope_position": 212,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "KLAY/USDT",
+      "scope_position": 213,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "VTHO/USDT",
+      "scope_position": 214,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "HNT/USDT",
+      "scope_position": 215,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "COINB/USDT",
+      "scope_position": 216,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BETH/USDT",
+      "scope_position": 217,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "CHZ/USDT",
+      "scope_position": 218,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MIRA/USDT",
+      "scope_position": 219,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RVN/USDT",
+      "scope_position": 220,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "AT/USDT",
+      "scope_position": 221,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "AUDIO/USDT",
+      "scope_position": 222,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "HOME/USDT",
+      "scope_position": 223,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 9
+    },
+    {
+      "symbol": "AGPUB/USDT",
+      "scope_position": 224,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ALICE/USDT",
+      "scope_position": 225,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 7
+    },
+    {
+      "symbol": "PSG/USDT",
+      "scope_position": 226,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "CKB/USDT",
+      "scope_position": 227,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 10
+    },
+    {
+      "symbol": "FF/USDT",
+      "scope_position": 228,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "INTWB/USDT",
+      "scope_position": 229,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SPK/USDT",
+      "scope_position": 230,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PLA/USDT",
+      "scope_position": 231,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "BABY/USDT",
+      "scope_position": 232,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LIT/USDT",
+      "scope_position": 233,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "PROVE/USDT",
+      "scope_position": 234,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "OPG/USDT",
+      "scope_position": 235,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "AGIX/USDT",
+      "scope_position": 236,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "ACH/USDT",
+      "scope_position": 237,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DNT/USDT",
+      "scope_position": 238,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "AVA/USDT",
+      "scope_position": 239,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BNX/USDT",
+      "scope_position": 240,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "YFII/USDT",
+      "scope_position": 241,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "IMX/USDT",
+      "scope_position": 242,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "WDCB/USDT",
+      "scope_position": 243,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PYR/USDT",
+      "scope_position": 244,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "CFX/USDT",
+      "scope_position": 245,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ACM/USDT",
+      "scope_position": 246,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MFT/USDT",
+      "scope_position": 247,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "ENSO/USDT",
+      "scope_position": 248,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BEAM/USDT",
+      "scope_position": 249,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "HUMA/USDT",
+      "scope_position": 250,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PIXEL/USDT",
+      "scope_position": 251,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SPYB/USDT",
+      "scope_position": 252,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TURTLE/USDT",
+      "scope_position": 253,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "EUL/USDT",
+      "scope_position": 254,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "THETA/USDT",
+      "scope_position": 255,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DIA/USDT",
+      "scope_position": 256,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "BTG/USDT",
+      "scope_position": 257,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "NEO/USDT",
+      "scope_position": 258,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "EPIC/USDT",
+      "scope_position": 259,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DAR/USDT",
+      "scope_position": 260,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "FLUX/USDT",
+      "scope_position": 261,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "ROBO/USDT",
+      "scope_position": 262,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "YGG/USDT",
+      "scope_position": 263,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "OOKI/USDT",
+      "scope_position": 264,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "BAKE/USDT",
+      "scope_position": 265,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "METAB/USDT",
+      "scope_position": 266,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GMX/USDT",
+      "scope_position": 267,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BOND/USDT",
+      "scope_position": 268,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "METIS/USDT",
+      "scope_position": 269,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "BMNRB/USDT",
+      "scope_position": 270,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "OMG/USDT",
+      "scope_position": 271,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "TSMB/USDT",
+      "scope_position": 272,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BTCST/USDT",
+      "scope_position": 273,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "ADX/USDT",
+      "scope_position": 274,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "AIGENSYN/USDT",
+      "scope_position": 275,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ANC/USDT",
+      "scope_position": 276,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "ADADOWN/USDT",
+      "scope_position": 277,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "RKLBB/USDT",
+      "scope_position": 278,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ERN/USDT",
+      "scope_position": 279,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "NEXO/USDT",
+      "scope_position": 280,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ARKM/USDT",
+      "scope_position": 281,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ELF/USDT",
+      "scope_position": 282,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "RSR/USDT",
+      "scope_position": 283,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BICO/USDT",
+      "scope_position": 284,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ARPA/USDT",
+      "scope_position": 285,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 5
+    },
+    {
+      "symbol": "MC/USDT",
+      "scope_position": 286,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "AMP/USDT",
+      "scope_position": 287,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PEOPLE/USDT",
+      "scope_position": 288,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SKL/USDT",
+      "scope_position": 289,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "RARE/USDT",
+      "scope_position": 290,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "REZ/USDT",
+      "scope_position": 291,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LITEB/USDT",
+      "scope_position": 292,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "KMNO/USDT",
+      "scope_position": 293,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LOOM/USDT",
+      "scope_position": 294,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "JASMY/USDT",
+      "scope_position": 295,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "HOODB/USDT",
+      "scope_position": 296,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AWE/USDT",
+      "scope_position": 297,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MEME/USDT",
+      "scope_position": 298,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TWT/USDT",
+      "scope_position": 299,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DYM/USDT",
+      "scope_position": 300,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "AUTO/USDT",
+      "scope_position": 301,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "OM/USDT",
+      "scope_position": 302,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "AION/USDT",
+      "scope_position": 303,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "NBS/USDT",
+      "scope_position": 304,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "1INCH/USDT",
+      "scope_position": 305,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "PNUT/USDT",
+      "scope_position": 306,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "DRAMB/USDT",
+      "scope_position": 307,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "BSW/USDT",
+      "scope_position": 308,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "SUN/USDT",
+      "scope_position": 309,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "FOGO/USDT",
+      "scope_position": 310,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "VELODROME/USDT",
+      "scope_position": 311,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "CELO/USDT",
+      "scope_position": 312,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MSFTB/USDT",
+      "scope_position": 313,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "ANT/USDT",
+      "scope_position": 314,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "IOTX/USDT",
+      "scope_position": 315,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 8
+    },
+    {
+      "symbol": "ALLO/USDT",
+      "scope_position": 316,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 6
+    },
+    {
+      "symbol": "FRONT/USDT",
+      "scope_position": 317,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "ASR/USDT",
+      "scope_position": 318,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "GTO/USDT",
+      "scope_position": 319,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "PDA/USDT",
+      "scope_position": 320,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "GFT/USDT",
+      "scope_position": 321,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "CITY/USDT",
+      "scope_position": 322,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LA/USDT",
+      "scope_position": 323,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "SC/USDT",
+      "scope_position": 324,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "MIR/USDT",
+      "scope_position": 325,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "RONIN/USDT",
+      "scope_position": 326,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "LLYB/USDT",
+      "scope_position": 327,
+      "status": "skipped",
+      "skip_reason": "short_history",
+      "saved_score": null
+    },
+    {
+      "symbol": "NEBL/USDT",
+      "scope_position": 328,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "C/USDT",
+      "scope_position": 329,
+      "status": "selected",
+      "skip_reason": null,
+      "saved_score": 9
+    },
+    {
+      "symbol": "VGX/USDT",
+      "scope_position": 330,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "TNSR/USDT",
+      "scope_position": 331,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ALT/USDT",
+      "scope_position": 332,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "ONG/USDT",
+      "scope_position": 333,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    },
+    {
+      "symbol": "TCT/USDT",
+      "scope_position": 334,
+      "status": "skipped",
+      "skip_reason": "inactive_or_non_spot",
+      "saved_score": null
+    },
+    {
+      "symbol": "SUSHI/USDT",
+      "scope_position": 335,
+      "status": "not_selected",
+      "skip_reason": null,
+      "saved_score": null
+    }
+  ]
+}

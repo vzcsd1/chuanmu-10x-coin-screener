@@ -1,0 +1,7 @@
+# R3 修复前基线（共享文件摘要 b2c050134f0d8279，ds 编辑中）；R3* 四项应红，其余应绿。
+ERROR:root:failed scoring DOGE/USDT
+ERROR:root:failed scoring DOGE/USDT
+ERROR: test_r3_inner_zeros_do_not_break_completeness (tests.test_live_futures_acceptance_glm.R3FieldCompletenessTests)
+ERROR: test_r3_normal_complete_sample_unchanged (tests.test_live_futures_acceptance_glm.R3FieldCompletenessTests)
+FAIL: test_r3_short_oi_history_is_not_ok (tests.test_live_futures_acceptance_glm.R3FieldCompletenessTests)
+FAIL: test_r3_trailing_zero_oi_not_masked_by_fresh_ls (tests.test_live_futures_acceptance_glm.R3FieldCompletenessTests)

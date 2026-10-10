@@ -14,6 +14,7 @@ const els = {
   scanBtnStage: $("#scan-btn-stage"),
   scanBtn: $("#scan-btn"),
   statusLine: $("#status-line"),
+  roundLine: $("#round-line"),
   lastLine: $("#last-line"),
   progress: $("#progress"),
   pauseBadges: $("#pause-badges"),
@@ -21,6 +22,8 @@ const els = {
   resultsTitle: $("#results-title"),
   resultsBadge: $("#results-badge"),
   resultsCount: $("#results-count"),
+  collapseBtn: $("#collapse-btn"),
+  collapsedNote: $("#collapsed-note"),
   filter: $("#filter"),
   results: $("#results"),
   emptyState: $("#empty-state"),
@@ -47,6 +50,36 @@ let toastTimer = null;
 let lastState = null;
 let panelMode = false;      // false = 入场舞台；true = 观测面板
 let stageHidden = false;
+
+/* —— 轮询重渲染的两道防护（A + B）——
+ *
+ * 背景：空闲时每 12 秒拉一次 /api/state，而 render() 只要 status==="success"
+ * 就调 renderRows()；renderRows() 会 `textContent = ""` 清空容器再重建全部卡片。
+ * 后果：已经点开的"展开详情"被折叠回去，滚动位置、文字选中、按钮焦点一并丢失。
+ *
+ * B（主）：内容指纹 — 数据没变就一个 DOM 节点都不动，问题从根上消失。
+ * A（兜底）：展开状态 — 万一数据真的变了要重建，也按 symbol 记住哪些是展开的。
+ */
+let lastRowsKey = null;          // B：上一次真正渲染过的内容指纹
+const openSymbols = new Set();   // A：哪些卡片处于展开状态（按 symbol，不用位置）
+let lastRenderedRows = [];       // 最近一次真正渲染进 DOM 的行（供调试/未来复用）
+let resultsCollapsed = false;    // 整批结果是否被收起（卡片级「展开详情」的上一级开关）
+
+/* B 用：把影响展示的字段摘出来做指纹。
+ * 只取卡片可见字段，不取整个 row —— 否则后端加个无关字段就会让指纹变化、
+ * 白白重建 DOM，B 就失效了。字段有增减时记得同步这里。 */
+const ROWS_KEY_FIELDS = [
+  "symbol", "score", "extra_score", "percentage_24h",
+  "deriv_status", "oi_chg_1d", "oi_chg_3d", "ls_top", "ls_global",
+  "funding_rate", "market_scope", "okx_contract", "has_futures",
+  "conditions", "extra_conditions", "c_trend", "breakout",
+];
+
+function rowsFingerprint(rows) {
+  if (!Array.isArray(rows)) return "";
+  return JSON.stringify(rows.map((row) =>
+    ROWS_KEY_FIELDS.map((k) => (row && row[k] !== undefined ? row[k] : null))));
+}
 
 /* ---------- 格式化 ---------- */
 
@@ -241,23 +274,36 @@ function buildCard(row, index) {
 
   const expandBtn = el("button", "expand-btn", "展开详情");
   expandBtn.type = "button";
-  expandBtn.setAttribute("aria-expanded", "false");
   const details = el("section", "details");
+  /* A：按 symbol 恢复展开状态。轮询重建 DOM 后，已经点开的卡片不会缩回去。
+     用 symbol 而不是列表位置——币的排序会随分数/成交额变化，位置不可靠。 */
+  const openKey = symbol.toUpperCase();
+  if (openSymbols.has(openKey)) {
+    details.classList.add("open");
+    expandBtn.setAttribute("aria-expanded", "true");
+    expandBtn.textContent = "收起详情";
+  } else {
+    expandBtn.setAttribute("aria-expanded", "false");
+  }
   expandBtn.addEventListener("click", () => {
     const open = details.classList.toggle("open");
+    if (open) openSymbols.add(openKey); else openSymbols.delete(openKey);
     expandBtn.setAttribute("aria-expanded", String(open));
     expandBtn.firstChild.textContent = open ? "收起详情" : "展开详情";
   });
   card.appendChild(expandBtn);
 
-  const lsSource = row.ls_source && String(row.ls_source).includes("回退")
-    ? `${fmtRatio(row.ls_top) ?? "暂无"}（回退口径）`
-    : fmtRatio(row.ls_top);
+  const lsIsFallback = !!(row.ls_source && String(row.ls_source).includes("回退"));
+  const lsDetails = [["大户持仓多空比", fmtRatio(row.ls_top), "ls_top"]];
+  if (lsIsFallback) {
+    // R2：回退口径是全市场账户比，不是大户持仓比——分开展示，不冒充
+    lsDetails.push(["全市场账户比（回退，仅供参考）", fmtRatio(row.ls_global), "ls_global"]);
+  }
   details.appendChild(buildDetailGroup("合约数据", [
     ["数据状态", deriv.label, "deriv_status"],
     ["OI 1日增速", fmtFractionPct(row.oi_chg_1d), "oi_chg_1d"],
     ["OI 3日增速", fmtFractionPct(row.oi_chg_3d), "oi_chg_3d"],
-    ["大户持仓多空比", lsSource, "ls_top"],
+    ...lsDetails,
     ["资金费率", fmtFunding(row.funding_rate), "funding_rate"],
     ["未平仓合约价值", fmtMoney(row.open_interest_value), "oi"],
     ["OI / 市值", fmtRatio(row.oi_cap_ratio), null],
@@ -310,13 +356,51 @@ function buildCard(row, index) {
 
 function renderRows(rows) {
   els.results.textContent = "";
-  const kw = currentFilter.toUpperCase();
+  lastRenderedRows = rows;
   rows.forEach((row, i) => {
-    const card = buildCard(row, i);
-    if (kw && !card.dataset.symbol.includes(kw)) card.hidden = true;
-    els.results.appendChild(card);
+    els.results.appendChild(buildCard(row, i));
   });
+  applyFilter();
 }
+
+/* 过滤只保留这一处实现。此前 renderRows 和 input 事件各写了一份判断，
+   改一处漏一处的风险很实在（比如以后想改成匹配币名而非交易对）。 */
+function applyFilter() {
+  const kw = currentFilter.toUpperCase();
+  for (const card of els.results.querySelectorAll(".card")) {
+    card.hidden = !!(kw && !card.dataset.symbol.includes(kw));
+  }
+}
+
+/* ---------- 整批结果收起 / 展开 ----------
+ *
+ * 这是卡片级「展开详情」的**上一级**开关：收起后整个结果区让位，方便先看
+ * 一眼本轮数量和摘要，再决定要不要逐张读；不需要重新扫描，纯本地视图状态。
+ *
+ * 为什么不直接清空 DOM：清空会丢卡片级展开态（openSymbols 之外的 DOM 状态），
+ * 而且收起后若再轮询到相同数据，B 的指纹判定会认为"没变"而不重建——反而更省。
+ * 所以只加一个 .collapsed 类把结果区 display:none，节点原样留着。
+ *
+ * 轮询安全：状态只存在 resultsCollapsed 这一个变量里，render 的收尾会
+ * 调 applyCollapse() 把类同步回来，所以数据刷新不会把收起态冲掉。
+ */
+function setCollapsed(collapsed) {
+  resultsCollapsed = !!collapsed;
+  const hasRows = els.results.childElementCount > 0;
+  els.results.classList.toggle("collapsed", resultsCollapsed);
+  els.collapseBtn.setAttribute("aria-expanded", String(!resultsCollapsed));
+  els.collapseBtn.querySelector(".collapse-label").textContent =
+    resultsCollapsed ? "全部展开" : "全部收起";
+  els.collapseBtn.title = resultsCollapsed
+    ? "展开本轮全部标的卡片" : "收起本轮全部标的卡片";
+  els.collapsedNote.hidden = !(resultsCollapsed && hasRows);
+}
+
+function applyCollapse() { setCollapsed(resultsCollapsed); }
+
+els.collapseBtn.addEventListener("click", () => {
+  setCollapsed(!resultsCollapsed);
+});
 
 /* ---------- 状态渲染 ---------- */
 
@@ -376,11 +460,44 @@ function showPanel() {
   }
 }
 
+/* R2 整轮摘要：数据完整性与"本轮无候选"必须由后端摘要表达，不能由卡片反推。
+   complete=数据完整（无候选是正常结果）；incomplete=本轮不完整，不得当完整推荐。 */
+function renderRound(round, quality) {
+  const elNode = els.roundLine;
+  if (!elNode) return;
+  if (!round || quality === "unknown") {
+    elNode.hidden = true;
+    elNode.textContent = "";
+    return;
+  }
+  const c = round.deriv_counts || {};
+  const expected = round.futures_expected;
+  const expectedText = (expected === null || expected === undefined) ? "未知" : String(expected);
+  if (quality === "complete") {
+    elNode.className = "round-line round-ok";
+    elNode.textContent = round.has_passing
+      ? `数据完整 · 合约数据 ${round.futures_fetched_ok}/${expectedText} · 异常 ${round.errors ?? 0}`
+      : `数据完整 · 本轮无候选（过门槛 ${round.chosen_count ?? 0}）`;
+  } else {
+    elNode.className = "round-line round-warn";
+    const domain = round.deriv_domain_state === "no_client"
+      ? " · 合约数据本轮不可用" : "";
+    elNode.textContent =
+      `本轮不完整 · 合约数据 ${round.futures_fetched_ok ?? "?"}/${expectedText}`
+      + ` · 暂停 ${c.paused ?? 0} 失败 ${c.failed ?? 0}`
+      + ` 陈旧 ${round.stale_rows ?? 0}`
+      + ` 跳过 ${round.skipped_short_history ?? 0} 异常 ${round.errors ?? "?"}`
+      + `${domain} —— 不作为完整推荐`;
+  }
+  elNode.hidden = false;
+}
+
 function render(state) {
   lastState = state;
   const { status, rows, last, error } = state;
   const demo = state.mode === "demo";
   els.demoBanner.hidden = !demo;
+  renderRound(state.round, state.round_quality);
 
   // 视图归属：纯初始（idle 且无历史）→ 舞台；其余一律进面板
   const shouldBePanel = status !== "idle" || !!last;
@@ -432,15 +549,32 @@ function render(state) {
     els.resultsTitle.textContent = "入选标的";
     els.resultsBadge.hidden = true;
     els.resultsCount.textContent = `本轮 ${rows.length} 个${minScore}`;
-    renderRows(rows);
+    els.collapseBtn.hidden = rows.length === 0;
+    /* B：数据没变就一个 DOM 节点都不动。
+       这样"展开详情"、滚动位置、选中的文字、按钮焦点全部自然保留。
+       注意指纹**只覆盖 rows**：状态行/摘要/暂停徽章仍然每次照常更新，
+       它们本来就该跟着最新状态走，不在 B 的拦截范围内。 */
+    const key = rowsFingerprint(rows);
+    if (key !== lastRowsKey || els.results.childElementCount === 0) {
+      lastRowsKey = key;
+      renderRows(rows);
+    }
+    applyCollapse();   // 收尾同步收起态（折叠开关/提示行/结果区 class）
   } else if (status === "empty") {
     els.idleState.hidden = true;
     els.emptyState.hidden = false;
-    $("#empty-sub").textContent = "候选池里没有币种达到评分门槛。潮水平静的时候也是常态。";
+    $("#empty-sub").textContent = state.round_quality === "incomplete"
+      ? "本轮部分数据未取到（见上方摘要）——不能据此认为“没有候选”，建议稍后重试。"
+      : "候选池里没有币种达到评分门槛。潮水平静的时候也是常态。";
     els.resultsTitle.textContent = "入选标的";
     els.resultsBadge.hidden = true;
     els.resultsCount.textContent = `本轮 0 个${minScore}`;
-    els.results.textContent = "";
+    els.collapseBtn.hidden = true;
+    if (els.results.childElementCount) {
+      els.results.textContent = "";
+      lastRowsKey = null;      // 结果已被清空 → 下次必须重新渲染
+    }
+    applyCollapse();
   } else if (showStale) {
     els.idleState.hidden = true;
     els.emptyState.hidden = true;
@@ -448,21 +582,36 @@ function render(state) {
     els.resultsBadge.hidden = false;
     if (last.status === "empty" || !(last.rows || []).length) {
       els.resultsCount.textContent = "上次为零结果";
-      els.results.textContent = "";
+      els.collapseBtn.hidden = true;
+      if (els.results.childElementCount) {
+        els.results.textContent = "";
+        lastRowsKey = null;
+      }
       els.emptyState.hidden = false;
       $("#empty-sub").textContent =
         `上次查询（${fmtTime(last.finished_at) || "—"}）没有发现符合条件的标的。`;
     } else {
       els.resultsCount.textContent = `上次 ${last.rows.length} 个 · ${fmtTime(last.finished_at) || "—"}`;
-      renderRows(last.rows);
+      els.collapseBtn.hidden = false;
+      const key = rowsFingerprint(last.rows);
+      if (key !== lastRowsKey || els.results.childElementCount === 0) {
+        lastRowsKey = key;
+        renderRows(last.rows);
+      }
     }
+    applyCollapse();
   } else {
     els.resultsTitle.textContent = "入选标的";
     els.resultsBadge.hidden = true;
     els.resultsCount.textContent = "";
-    els.results.textContent = "";
+    els.collapseBtn.hidden = true;
+    if (els.results.childElementCount) {
+      els.results.textContent = "";
+      lastRowsKey = null;
+    }
     els.emptyState.hidden = true;
     els.idleState.hidden = true;
+    applyCollapse();
   }
 
   if (demo) {
@@ -517,10 +666,7 @@ els.scanBtn.addEventListener("click", triggerScan);
 
 els.filter.addEventListener("input", () => {
   currentFilter = els.filter.value.trim();
-  const kw = currentFilter.toUpperCase();
-  for (const card of els.results.querySelectorAll(".card")) {
-    card.hidden = kw && !card.dataset.symbol.includes(kw);
-  }
+  applyFilter();
 });
 
 /* ---------- 场景初始化与动效开关 ---------- */

@@ -257,7 +257,10 @@ class ScanIntegrationTests(TestCase):
         rows = base.public_selection(self.spot, self.futures, self.cfg)
         swap = next(r for r in rows if r["symbol"] == "SWAP/USDT")
         self.assertEqual(swap["deriv_status"], "partial")
-        self.assertEqual(swap["ls_source"], "globalLongShortAccountRatio(回退口径)")
+        # R2（2026-10-07）起回退值为仅展示字段，标签同步更新；语义仍是 partial 不冒充 ok
+        self.assertEqual(swap["ls_source"], "globalLongShortAccountRatio(回退,仅展示)")
+        self.assertNotIn("ls_top", swap)  # 回退值不得冒充大户持仓比
+        self.assertEqual(swap.get("ls_global"), 1.1)
 
     def test_fetch_markets_scoped_per_domain(self):
         spot_client = base.build_exchange(replace(base.Config(), proxy=None), "spot")

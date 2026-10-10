@@ -5,7 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>观潮 · 个人选币工作台</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M2 20c5-6 9-6 14 0s9 6 14 0' fill='none' stroke='%234cc2bc' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="/static/style.css?v=3">
+<link rel="stylesheet" href="/static/style.css?v=4">
+<link rel="stylesheet" href="/static/result-fx.css?v=3">
 </head>
 <body>
 
@@ -31,6 +32,7 @@
     <span class="panel-brand">观潮</span>
     <div class="panel-status">
       <p id="status-line" class="status-line">待查询</p>
+      <p id="round-line" class="round-line" hidden></p>
       <p id="last-line" class="last-line">上次完成：—</p>
     </div>
     <button id="scan-btn" class="btn-primary btn-compact" type="button">
@@ -46,10 +48,20 @@
     <h2 id="results-title">入选标的</h2>
     <span id="results-badge" class="badge-stale" hidden>上次结果</span>
     <span id="results-count" class="results-count"></span>
+    <button id="collapse-btn" class="collapse-btn" type="button"
+            aria-expanded="true" aria-controls="results" hidden>
+      <span class="collapse-label">全部收起</span>
+    </button>
     <input id="filter" type="search" placeholder="按币名过滤…" aria-label="按币名过滤">
   </section>
 
-  <section id="results" class="results" aria-label="结果区"></section>
+  <p id="collapsed-note" class="collapsed-note" hidden>
+    结果已收起 · 点右上角「全部展开」查看本轮标的
+  </p>
+
+  <div class="results-shell">
+    <section id="results" class="results" aria-label="结果区"></section>
+  </div>
 
   <section id="empty-state" class="empty-state" hidden>
     <div class="empty-mark" aria-hidden="true"></div>
@@ -72,7 +84,8 @@
 
 <div id="toast" role="status" hidden></div>
 
-<script src="/static/ocean.js?v=4"></script>
-<script src="/static/app.js?v=3"></script>
+<script src="/static/ocean.js?v=5"></script>
+<script src="/static/app.js?v=5"></script>
+<script src="/static/result-fx.js?v=2"></script>
 </body>
 </html>

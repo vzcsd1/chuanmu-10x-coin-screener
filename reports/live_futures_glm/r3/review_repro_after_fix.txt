@@ -1,0 +1,4 @@
+WARNING:root:OKX 客户端不可用: 测试离线
+WARNING:root:OKX 客户端不可用: 测试离线
+short data_complete= False oi_chg_3d= None deriv_status= partial as_of_min= None oi_as_of_min= None stale_rows= 0
+old data_complete= False oi_chg_3d= 0.4320442784916434 deriv_status= ok as_of_min= 1700608400000 oi_as_of_min= 1700608400000 stale_rows= 1

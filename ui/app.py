@@ -57,10 +57,16 @@ def _load_scan_module():
 
 
 def real_scan():
-    """直接调用原 scan(base.env_config())，不复制任何筛选逻辑。"""
+    """直接调用原 scan(base.env_config())，不复制任何筛选逻辑。
+
+    R2（2026-10-07）：连同整轮摘要一起返回 {"rows", "round"}——摘要是整轮覆盖与
+    完整性的唯一来源，不能由前端从过门槛卡片反推；scan() 的返回约定不变。
+    """
     base = _load_base()
     mod = _load_scan_module()
-    return mod.scan(base.env_config())
+    round_stats: dict = {}
+    rows = mod.scan(base.env_config(), round_stats=round_stats)
+    return {"rows": rows, "round": round_stats}
 
 
 def sanitize(value):
@@ -135,6 +141,7 @@ class ScanManager:
         self.finished_at: int | None = None
         self.error: str | None = None
         self.rows: list | None = None
+        self.round: dict | None = None   # 本轮整轮摘要（R2）；演示/旧载荷为 None
         self.last = None if demo else self._load_last()
 
     def _load_last(self):
@@ -184,20 +191,28 @@ class ScanManager:
     def _run(self) -> None:
         try:
             raw = self._demo_scan() if self._demo else self._scan_fn()
-            rows = sanitize(raw if isinstance(raw, list) else [])
+            # R2：新载荷 {"rows", "round"}；旧载荷（纯 list）保持兼容
+            if isinstance(raw, dict) and "rows" in raw:
+                rows = sanitize(raw.get("rows") if isinstance(raw.get("rows"), list) else [])
+                round_info = raw.get("round") if isinstance(raw.get("round"), dict) else None
+            else:
+                rows = sanitize(raw if isinstance(raw, list) else [])
+                round_info = None
             finished = now_ms()
             payload = {
-                "version": 1,
+                "version": 2,
                 "status": "success" if rows else "empty",
                 "started_at": self.started_at,
                 "finished_at": finished,
                 "count": len(rows),
                 "rows": rows,
+                "round": round_info,
             }
             self._save_last(payload)
             with self._lock:
                 self.status = payload["status"]
                 self.rows = rows
+                self.round = round_info
                 self.finished_at = finished
                 self.error = None
                 if not self._demo:
@@ -214,6 +229,21 @@ class ScanManager:
                 self.finished_at = now_ms()
                 self.error = message
                 self.rows = None
+                self.round = None  # 本轮未完成，不存在本轮摘要
+
+    @staticmethod
+    def _round_quality(round_info: dict | None) -> str:
+        """三态：执行完成/数据完整/有无候选中的「数据完整」维度。
+
+        complete：本轮走完且数据完整（此时无候选=正常"本轮无候选"）；
+        incomplete：本轮走完但数据不完整（不得显示完整推荐）；
+        unknown：无摘要可用（演示模式或旧载荷）。
+        """
+        if not isinstance(round_info, dict):
+            return "unknown"
+        if round_info.get("task_completed") and round_info.get("data_complete"):
+            return "complete"
+        return "incomplete"
 
     def snapshot(self) -> dict:
         with self._lock:
@@ -225,6 +255,8 @@ class ScanManager:
                 "server_now": now_ms(),
                 "error": self.error,
                 "rows": self.rows,
+                "round": self.round,
+                "round_quality": self._round_quality(self.round),
                 "last": self.last,
                 "min_score": current_min_score(),
                 "paused": read_pauses(),

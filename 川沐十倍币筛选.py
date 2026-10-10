@@ -22,15 +22,19 @@ import sys
 import binance_box_strategy as base
 
 
-def scan(cfg):
-    """跑一轮扫描，返回达到 min_score 的标的（已按分数降序）。"""
+def scan(cfg, round_stats: dict | None = None):
+    """跑一轮扫描，返回达到 min_score 的标的（已按分数降序）。
+
+    R2（2026-10-07）：可选 `round_stats` dict 传入时，整轮摘要（覆盖范围/合约完整性/
+    候选有无）写入其中；不传时行为与返回值与旧版完全一致。
+    """
     spot, futures, cfg = base.connect_exchanges(cfg)
     okx = None
     try:
         okx = base.okx_exchange(cfg)
     except Exception as exc:  # noqa: BLE001
         logging.warning("OKX 客户端不可用: %s", exc)
-    ranked = base.public_selection(spot, futures, cfg, okx)
+    ranked = base.public_selection(spot, futures, cfg, okx, round_stats=round_stats)
     return [row for row in ranked if row["score"] >= cfg.min_score]
 
 

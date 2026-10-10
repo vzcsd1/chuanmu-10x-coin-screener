@@ -13,6 +13,11 @@ py -3.10 -m pip install -r ui\requirements-ui.txt
 
 ## 启动 / 停止
 
+**最省事：双击 `启动观潮工作台.bat`**（真实模式）。窗口不关，服务就一直在；
+关窗口即停止。想跑演示模式：命令行执行 `启动观潮工作台.bat -Demo`。
+
+也可以直接用 PowerShell：
+
 ```powershell
 # 真实模式（调用现有筛选器，扫描需要几分钟，期间可离开页面，回来结果还在）
 powershell -ExecutionPolicy Bypass -File .\start_ui.ps1
@@ -25,6 +30,15 @@ powershell -ExecutionPolicy Bypass -File .\start_ui.ps1 -Demo
 - **停止**：在启动窗口按 `Ctrl+C`，或直接关闭那个窗口。
 - 重复双击启动不会开多个服务：检测到服务已在运行时只会再开一个页面。
 
+> ⚠️ **这个服务不是常驻的**——关掉启动窗口、或重启电脑，服务就停了。
+> 这时浏览器打开 `http://127.0.0.1:8765` 会看到 **502**，那不是网页坏了，是**服务没在跑**。
+> 先确认一下：
+> ```powershell
+> netstat -ano | findstr ":8765"
+> ```
+> 没有任何输出 = 没开，去双击 `启动观潮工作台.bat` 即可。
+
+
 ## 使用
 
 1. 点「查询标的」才开始扫描；打开页面、刷新页面都不会自动扫。
@@ -32,8 +46,11 @@ powershell -ExecutionPolicy Bypass -File .\start_ui.ps1 -Demo
 3. 结果卡片：币名、核心评分（规则得分，**不是上涨概率**）、市场范围、合约数据
    状态、命中原因；点「展开详情」看 OI 增速、大户多空比、成交额/市值等字段，
    取不到的字段显示「暂无」，不会冒充 0。
-4. 「复制币名」「复制研究提示词」在本地生成文本，可粘贴到 Grok/Gemini 自行研究。
-5. 上次成功结果保存在 `results/ui/last_result.json`；刷新页面自动恢复，
+4. 结果多的时候点结果头右上角的「全部收起」，整批卡片收起来、面板缩到只剩标题，
+   海面铺满全屏；再点「全部展开」恢复。收起状态在后台刷新时不会被打回展开，
+   零结果时该开关自动隐藏。
+5. 「复制币名」「复制研究提示词」在本地生成文本，可粘贴到 Grok/Gemini 自行研究。
+6. 上次成功结果保存在 `results/ui/last_result.json`；刷新页面自动恢复，
    查询失败时保留上次结果并标注「上次结果」。
 
 ## 文件
@@ -46,13 +63,16 @@ powershell -ExecutionPolicy Bypass -File .\start_ui.ps1 -Demo
 | `ui/test_ui.py` | 隔离测试：注入假 scan，不联网、不碰归档任务 |
 | `ui/requirements-ui.txt` | 独立依赖清单 |
 | `start_ui.ps1` | 启动入口 |
+| `启动观潮工作台.bat` | 双击启动（纯 ASCII 转发到 `start_ui.ps1`；`%*` 透传，可加 `-Demo`） |
 | `results/ui/last_result.json` | 上次成功结果（自动生成） |
 
 ## 测试
 
 ```powershell
-py -3.10 ui\test_ui.py
+py -3.10 ui\test_ui.py     # 后端接口测试（25 项）
+node ui\test_app_poll.js   # 前端行为测试（40 项）
 ```
 
 覆盖：重复点击只触发一次扫描、刷新恢复上次结果、零结果正确保存、失败不覆盖
-上次结果、NaN 转 null、演示模式不写真实结果、跨站 POST 被拒绝。
+上次结果、NaN 转 null、演示模式不写真实结果、跨站 POST 被拒绝；
+以及前端：轮询不重建 DOM、卡片展开态不被冲回、整批收起跨刷新保持、过滤统一。

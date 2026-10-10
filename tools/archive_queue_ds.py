@@ -682,7 +682,7 @@ def run_queue(chunk: int, max_minutes: float, min_free_gib: float,
               max_hours: float = 0.0, workers: int = 1,
               version: str = "v1", compact_every: int = 0,
               ramp: str = "auto", tier: str | None = None,
-              inflight_bytes_budget: int = 0) -> int:
+              inflight_bytes_budget: int = 0, reuse_parts: bool = False) -> int:
     p = paths_for(version)
     _setup_logging(p["log"])
     out_dir = OUT_DIR
@@ -731,9 +731,12 @@ def run_queue(chunk: int, max_minutes: float, min_free_gib: float,
                       status_csv=None, max_files=0, max_bytes=0,
                       max_minutes=max_minutes, min_free_gib=min_free_gib,
                       interval_sec=cur_interval, retries=2, workers=cur_workers,
-                      compact_every=compact)
+                      compact_every=compact, reuse_parts=bool(reuse_parts))
     if inflight_bytes_budget:
         opts.inflight_bytes_budget = int(inflight_bytes_budget)
+    if reuse_parts:
+        logging.info("已打开 .part 复用：正式文件与 .pending 都不在时，"
+                     "读留证的 .part 代替下载 ZIP（校验一步不少）")
     logging.info("状态快照整理阈值 compact_every=%d（总 %d 项）；在途字节预算 %.0f MiB",
                  compact, len(entries), opts.inflight_bytes_budget / 2 ** 20)
 
@@ -1017,6 +1020,9 @@ def main(argv: list[str] | None = None) -> int:
                        help="把档位钉在 A/B/C/D（关闭自动上探）")
     p_run.add_argument("--inflight-mib", type=int, default=0,
                        help="同时在途响应字节预算（MiB）；0=用下载器默认 512")
+    p_run.add_argument("--reuse-parts", action="store_true",
+                       help="复用留证用的 .part（命中不发 ZIP 请求，校验一步不少）。"
+                            "需配合保留旧台账与修正清单的队列版本使用")
 
     p_status = sub.add_parser("status", help="查看进度")
     p_status.add_argument("--version", default="v1")
@@ -1051,7 +1057,8 @@ def main(argv: list[str] | None = None) -> int:
                          workers=args.workers, version=args.version,
                          compact_every=args.compact_every,
                          ramp=args.ramp, tier=args.tier or None,
-                         inflight_bytes_budget=int(args.inflight_mib) * 2 ** 20)
+                         inflight_bytes_budget=int(args.inflight_mib) * 2 ** 20,
+                         reuse_parts=bool(args.reuse_parts))
     if args.cmd == "stop":
         OUT_DIR.mkdir(parents=True, exist_ok=True)
         sp = stop_path(OUT_DIR)

@@ -1253,5 +1253,244 @@ class TestRequestCountAndSharedPacing(unittest.TestCase):
         self.assertEqual(o.last_request_count, 0, "每块计数必须重置")
 
 
+class TestReadPhaseErrorsAreWrapped(unittest.TestCase):
+    """读取阶段（iter_content）异常必须和连接阶段一样包装成 FetchError。
+
+    回归 2026-10-07 20:14 实测事故：data.binance.vision 读超时抛出的
+    ConnectionError 未被包装，穿过 fetch_one 的 except 链，再经线程池
+    ex.map() 冒到主线程，把整轮下载（第 9 块中途）打死。
+    """
+
+    def _fetcher_whose_body_raises(self, exc):
+        f = ad.RequestsFetcher(pool_size=1)
+
+        class _Resp:
+            status_code = 200
+            headers = {}
+
+            def iter_content(self, n):
+                raise exc
+
+            def close(self):
+                pass
+
+        class _Sess:
+            def get(self, url, timeout=None, stream=True):
+                return _Resp()
+
+        f.session = _Sess()
+        return f
+
+    def test_read_timeout_becomes_fetch_error(self):
+        import requests
+        f = self._fetcher_whose_body_raises(
+            requests.exceptions.ConnectionError("Read timed out."))
+        with self.assertRaises(ad.FetchError):
+            f.get("https://example.com/a.zip")
+
+    def test_body_budget_still_not_downgraded(self):
+        """字节预算异常不能被降级成普通 FetchError（语义不同）。"""
+        f = self._fetcher_whose_body_raises(ad.ByteBudgetExceeded("over"))
+        with self.assertRaises(ad.ByteBudgetExceeded):
+            f.get("https://example.com/a.zip")
+
+    def test_read_phase_error_recorded_not_fatal(self):
+        """端到端：读阶段异常记成「网络失败」，run_fetch 必须活着返回。"""
+        import requests
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            e = entry("https://example.com/r.zip", symbol="RUSDT")
+            f = self._fetcher_whose_body_raises(
+                requests.exceptions.ConnectionError("Read timed out."))
+            r, summary = ad.run_fetch([e], opts(tmp, retries=1), fetcher=f,
+                                      sleeper=lambda s: None)
+            self.assertEqual(r[0]["status"], ad.S_TRANSIENT)
+            self.assertIn("网络失败 1", summary)
+
+
+class TestPartReuse(unittest.TestCase):
+    """`.part` 复用：把"留证字节"提升为正式文件，但**一步校验都不少**。
+
+    背景：2,131 项 `content_anomaly` 的原始字节都已完好保存在 `.part` 里
+    （全量核验 2131/2131 通过）。复用它们的唯一目的是**省掉重复下载**，
+    绝不能顺带把校验放行。四类验收各自独立成测试：
+
+    1. 命中 `.part` → **不发 ZIP 请求**（但 CHECKSUM 请求照发）；
+    2. 复用后校验不过 → **仍是 `content_anomaly`**，不转正；
+    3. 重跑 → 已转正的项变成"本地完整"，**不重复下载**；
+    4. 原已完成项 → 状态**不回退**。
+    """
+
+    def _seed_part(self, tmp: Path, e: ad.Entry, content: bytes) -> Path:
+        part = ad.part_path_for(tmp / "out", e)
+        part.parent.mkdir(parents=True, exist_ok=True)
+        part.write_bytes(content)
+        return part
+
+    def test_hit_part_skips_zip_download(self):
+        """命中 `.part` 时，ZIP 的 URL 一次都不该被请求。"""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            content = make_zip()
+            zip_url = "https://example.com/part/AUSDT.zip"
+            ck_url = zip_url + ".CHECKSUM"
+            digest = ad.sha256_hex(content)
+            e = entry(zip_url, symbol="AUSDT", size=len(content),
+                      checksum_url=ck_url)
+            self._seed_part(tmp, e, content)
+            # ZIP 路由**故意不给**：一旦真去下载就会 NotFound
+            f = FakeFetcher({ck_url: f"{digest}  AUSDT.zip\n".encode()})
+
+            r, summary = ad.run_fetch([e], opts(tmp, reuse_parts=True), fetcher=f,
+                                      sleeper=lambda s: None)
+
+            self.assertEqual(f.calls, [ck_url],
+                             f"只应请求 CHECKSUM，实际请求了 {f.calls}")
+            self.assertNotIn(zip_url, f.calls, "不得请求 ZIP")
+            self.assertEqual(r[0]["status"], ad.S_SUCCESS)
+            self.assertEqual(r[0]["checksum_status"], ad.CHECK_VERIFIED)
+            official = tmp / "out" / e.relpath()
+            self.assertTrue(official.exists(), "复用成功必须转正为正式文件")
+            self.assertFalse(ad.part_path_for(tmp / "out", e).exists(),
+                             "转正后 .part 应被消费（_write 内部 replace）")
+
+    def test_reuse_disabled_by_default_still_downloads(self):
+        """默认关闭时行为与旧版一致：照常发 ZIP 请求。"""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            content = make_zip()
+            zip_url = "https://example.com/part/BUSDT.zip"
+            e = entry(zip_url, symbol="BUSDT", size=len(content))
+            self._seed_part(tmp, e, content)          # 即使 .part 在
+            f = FakeFetcher({zip_url: content})       # 也应去下载
+
+            r, _ = ad.run_fetch([e], opts(tmp), fetcher=f, sleeper=lambda s: None)
+
+            self.assertIn(zip_url, f.calls, "未开开关就必须走正常下载")
+            self.assertEqual(r[0]["status"], ad.S_SUCCESS)
+
+    def test_reused_part_failing_checksum_stays_anomaly(self):
+        """复用后校验不符 → 仍是 `content_anomaly`，**不得转正**。"""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            content = make_zip()
+            zip_url = "https://example.com/part/CUSDT.zip"
+            ck_url = zip_url + ".CHECKSUM"
+            e = entry(zip_url, symbol="CUSDT", size=len(content),
+                      checksum_url=ck_url)
+            self._seed_part(tmp, e, content)
+            other = "0" * 64                          # 与本地摘要必然不同
+            f = FakeFetcher({ck_url: f"{other}  CUSDT.zip\n".encode()})
+
+            r, _ = ad.run_fetch([e], opts(tmp, reuse_parts=True), fetcher=f,
+                                sleeper=lambda s: None)
+
+            self.assertEqual(r[0]["status"], ad.S_ANOMALY)
+            self.assertEqual(r[0]["checksum_status"], ad.CHECK_MISMATCH)
+            self.assertNotIn(zip_url, f.calls, "校验失败也不该回退去下载")
+            self.assertFalse((tmp / "out" / e.relpath()).exists(),
+                             "校验不过绝不能出现在正式路径")
+            self.assertTrue(ad.part_path_for(tmp / "out", e).exists(),
+                            "字节要留在 .part 继续留证")
+
+    def test_reused_part_zip_structure_bad_stays_anomaly(self):
+        """来源无校验值时，`.part` 还必须过结构检查才可能转正。"""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            bad = b"this is not a zip at all" * 40
+            zip_url = "https://example.com/part/DUSDT.zip"
+            e = entry(zip_url, symbol="DUSDT", size=None)   # 无清单大小 → 不看字节数
+            self._seed_part(tmp, e, bad)
+            f = FakeFetcher({})                             # 无 CHECKSUM → no_checksum_source
+
+            r, _ = ad.run_fetch([e], opts(tmp, reuse_parts=True), fetcher=f,
+                                sleeper=lambda s: None)
+
+            self.assertEqual(r[0]["status"], ad.S_ANOMALY)
+            self.assertIn("内容异常", r[0]["note"])
+            self.assertFalse((tmp / "out" / e.relpath()).exists())
+
+    def test_second_run_does_not_download_again(self):
+        """复用转正后再跑一遍 → 记为「本地完整」，**零请求**（不重复下载）。"""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            content = make_zip()
+            zip_url = "https://example.com/part/EUSDT.zip"
+            ck_url = zip_url + ".CHECKSUM"
+            digest = ad.sha256_hex(content)
+            e = entry(zip_url, symbol="EUSDT", size=len(content),
+                      checksum_url=ck_url)
+            self._seed_part(tmp, e, content)
+            f1 = FakeFetcher({ck_url: f"{digest}  EUSDT.zip\n".encode()})
+            o1 = opts(tmp, reuse_parts=True)
+            r1, _ = ad.run_fetch([e], o1, fetcher=f1, sleeper=lambda s: None)
+            self.assertEqual(r1[0]["status"], ad.S_SUCCESS)
+            self.assertEqual(f1.calls, [ck_url])
+
+            f2 = FakeFetcher({})   # 第二轮**任何**请求都是意料之外
+            o2 = opts(tmp, reuse_parts=True)
+            o2.state_path = o1.state_path          # 续用同一台账
+            r2, _ = ad.run_fetch([e], o2, fetcher=f2, sleeper=lambda s: None)
+
+            self.assertEqual(f2.calls, [], f"第二轮不该发任何请求：{f2.calls}")
+            self.assertEqual(r2[0]["status"], ad.S_COMPLETE)
+            self.assertEqual(r2[0]["checksum_sha256"], digest,
+                             "跳过时必须保留已确认的校验摘要，不能被空值抹掉")
+
+    def test_already_done_item_not_regressed(self):
+        """已完成项在开复用后**不回退**：仍是 `skipped_complete` + 原摘要。"""
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            content = make_zip()
+            zip_url = "https://example.com/part/FUSDT.zip"
+            ck_url = zip_url + ".CHECKSUM"
+            digest = ad.sha256_hex(content)
+            e = entry(zip_url, symbol="FUSDT", size=len(content),
+                      checksum_url=ck_url)
+            # 第一轮：走正常下载完成
+            f1 = FakeFetcher({zip_url: content, ck_url: f"{digest}  FUSDT.zip\n".encode()})
+            o1 = opts(tmp)
+            r1, _ = ad.run_fetch([e], o1, fetcher=f1, sleeper=lambda s: None)
+            self.assertEqual(r1[0]["status"], ad.S_SUCCESS)
+
+            # 第二轮：**打开复用**，也不该影响已完成项
+            f2 = FakeFetcher({})
+            o2 = opts(tmp, reuse_parts=True)
+            o2.state_path = o1.state_path
+            r2, _ = ad.run_fetch([e], o2, fetcher=f2, sleeper=lambda s: None)
+
+            self.assertEqual(f2.calls, [])
+            self.assertEqual(r2[0]["status"], ad.S_COMPLETE)
+            self.assertEqual(r2[0]["checksum_status"], ad.CHECK_VERIFIED)
+            self.assertEqual(r2[0]["checksum_sha256"], digest)
+            self.assertEqual(r2[0]["bytes"], len(content))
+
+    def test_reused_part_size_mismatch_with_manifest_stays_anomaly(self):
+        """清单大小与实际字节不符时，复用**不能**绕过 `inspect_content` 的大小检查。
+
+        这正是 2,131 项的真实处境：清单旧大小 ≠ 当前字节。若不复用清单修正
+        就必须重下；这也说明"复用 + 旧清单"会空转（校验不过），
+        所以纳管前必须先换成 v3 修正清单。
+        """
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            content = make_zip()
+            zip_url = "https://example.com/part/GUSDT.zip"
+            ck_url = zip_url + ".CHECKSUM"
+            digest = ad.sha256_hex(content)
+            e = entry(zip_url, symbol="GUSDT",
+                      size=len(content) + 329,          # 清单记的是旧大小
+                      checksum_url=ck_url)
+            self._seed_part(tmp, e, content)
+            f = FakeFetcher({ck_url: f"{digest}  GUSDT.zip\n".encode()})
+
+            r, _ = ad.run_fetch([e], opts(tmp, reuse_parts=True), fetcher=f,
+                                sleeper=lambda s: None)
+
+            self.assertEqual(r[0]["status"], ad.S_ANOMALY)
+            self.assertIn("字节数与清单不符", r[0]["note"])
+            self.assertNotIn(zip_url, f.calls)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

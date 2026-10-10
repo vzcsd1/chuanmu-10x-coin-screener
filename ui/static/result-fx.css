@@ -1,0 +1,238 @@
+/* 观潮 · 海下观测舱 —— 结果面板与卡片内部的水光、透光与空间层次
+ *
+ * 独立视觉模块：与 style.css 分层，整体可撤。
+ * 撤回方法：index.html 去掉本文件与 result-fx.js 两行引用即可回到旧外观，
+ * 本文件对 style.css 的两处覆盖（.details 显示方式、.results.collapsed 显示方式）
+ * 随文件删除一并失效，不影响业务功能。
+ *
+ * 层次约定（.panel 内）：
+ *   .cabin（z-index:0，pointer-events:none）—— 舱体水光 canvas + CSS 光柱/纵向明暗
+ *   原有内容（z-index:1）—— 文字数字稳定可读
+ *   .tide-flash（z-index:2，pointer-events:none）—— 结果到达的一次性潮光
+ */
+
+/* ---------- 面板舱体 ---------- */
+
+.panel {
+  /* 覆盖 style.css 的实色玻璃底：上近水面微亮、向下渐深 */
+  background: linear-gradient(180deg,
+    rgba(10, 26, 44, .80) 0%,
+    rgba(8, 19, 33, .84) 55%,
+    rgba(5, 13, 24, .88) 100%);
+}
+
+.panel > :not(.cabin):not(.tide-flash) { position: relative; z-index: 1; }
+
+.cabin {
+  position: absolute;
+  inset: -8px;               /* 视差平移 ≤5px，不露边 */
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.cabin-fx {
+  width: 100%;
+  height: 100%;
+  display: block;
+  mix-blend-mode: screen;
+  opacity: .48;
+  /* 柔化分两种做法：
+   *   ① 水光 canvas（每帧变）——由 result-fx.js 的 GLSL 2×2 超采样内建承担，
+   *      不用 CSS filter，避免每帧多一层合成过滤（性能开销来源之一）。
+   *   ② 下面静态的光柱/明暗层——本身是低频渐变，用低分辨率位图放大即可获得
+   *      同类柔化效果，零每帧开销（不随动画重算，仅在尺寸变化时重算一次）。 */
+  filter: saturate(1.25);
+}
+
+/* 斜向透光：自右上（首页月亮方位）洒入舱内，缓慢呼吸聚散，不是平移云图 */
+.cabin::before {
+  content: "";
+  position: absolute;
+  inset: -10%;
+  background:
+    linear-gradient(118deg, transparent 26%, rgba(140, 210, 225, .07) 42%,
+      rgba(175, 228, 238, .10) 50%, rgba(140, 210, 225, .07) 58%, transparent 74%),
+    linear-gradient(118deg, transparent 52%, rgba(120, 200, 215, .05) 66%, transparent 84%);
+  animation: cabin-breathe 9s ease-in-out infinite alternate;
+}
+
+@keyframes cabin-breathe {
+  0%   { opacity: .62; transform: translateX(-1.4%); }
+  100% { opacity: 1;   transform: translateX(1.4%); }
+}
+
+/* 纵向明暗：近水面微亮，舱底转深（远近层次） */
+.cabin::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(120, 190, 215, .09) 0%, transparent 34%, rgba(2, 8, 16, .30) 100%);
+}
+
+/* ---------- 结果到达的潮光（JS 加 .play 播一次） ---------- */
+
+.tide-flash {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  overflow: hidden;
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+.tide-flash::before {
+  content: "";
+  position: absolute;
+  top: -20%;
+  bottom: -20%;
+  left: 0;
+  width: 36%;
+  background: linear-gradient(105deg, transparent,
+    rgba(150, 226, 220, .14) 40%, rgba(196, 242, 236, .20) 50%,
+    rgba(150, 226, 220, .14) 60%, transparent);
+  transform: translateX(-170%) skewX(-12deg);
+}
+
+.tide-flash.play::before { animation: tide-sweep .68s var(--ease-out) both; }
+
+@keyframes tide-sweep {
+  to { transform: translateX(430%) skewX(-12deg); }
+}
+
+/* ---------- 卡片：不同深度的水层玻璃 ---------- */
+
+.card {
+  /* 覆盖 style.css 实色底：深层水体渐变，比面板更暗一档（卡在近、舱在远） */
+  background: linear-gradient(165deg,
+    rgba(13, 33, 53, .90) 0%, rgba(8, 19, 32, .92) 100%);
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.card > * { position: relative; z-index: 1; }
+
+/* 卡内水光：三层光斑，位移 + 缩放 + 呼吸叠加，缓慢聚散游移（非匀速平移） */
+.card::before {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(30% 24% at 22% 26%, rgba(96, 210, 200, .10), transparent 70%),
+    radial-gradient(26% 22% at 74% 64%, rgba(70, 160, 200, .09), transparent 70%),
+    radial-gradient(20% 18% at 52% 16%, rgba(150, 220, 235, .06), transparent 70%);
+  animation: card-drift 11s ease-in-out infinite alternate;
+  transition: opacity .4s ease;
+}
+
+/* 相邻卡片相位错开，整面墙不齐呼吸 */
+.card:nth-child(3n + 2)::before { animation-delay: -3.7s; animation-duration: 13s; }
+.card:nth-child(3n)::before    { animation-delay: -7.3s; animation-duration: 9.5s; }
+
+@keyframes card-drift {
+  0%   { transform: translate(-2.5%, -1.5%) scale(1);    opacity: .72; }
+  50%  { opacity: 1; }
+  100% { transform: translate(2.5%, 2%) scale(1.06);    opacity: .82; }
+}
+
+/* 详情展开时，卡内水光随开合变亮一档（背景光线连续变化） */
+.card:has(.details.open)::before { opacity: 1; }
+
+/* 指针反光：材质层跟随指针，内容与底层不动 → 前后视差 */
+.card::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(220px circle at var(--mx, 50%) var(--my, -40%),
+    rgba(126, 224, 214, .15), rgba(126, 224, 214, .05) 42%, transparent 68%);
+  opacity: var(--hover, 0);
+  transition: opacity .25s ease;
+}
+
+/* 复制反馈：一次局部水光变亮后自然回落 */
+.card.flash::after { animation: card-flash .5s ease-out both; }
+
+@keyframes card-flash {
+  0%   { opacity: 1; }
+  100% { opacity: var(--hover, 0); }
+}
+
+/* 卡片入场：默认无动画直接可见（JS 不可用时天然降级）；
+   覆盖 style.css 的常驻 rise——改由 result-fx.js 按视口需要播放。
+   backwards 填充：delay 期间隐藏，播完释放，hover 上移恢复生效。 */
+.card { animation: none; }
+
+.card.fx-wait { opacity: 0; transform: translateY(14px); }
+
+.card.fx-rise { animation: rise .5s var(--ease-out) backwards; animation-delay: calc(var(--i, 0) * 65ms); }
+
+/* 滚动到视口才显现的卡片不再排队，立即出现 */
+.card.fx-rise-now { animation: rise .38s var(--ease-out) backwards; }
+
+/* ---------- 详情开合：高度 / 透明度 / 光线连续（250–450ms） ---------- */
+
+.details {
+  display: block;              /* 覆盖 style.css 的 display:none，过渡才能发生 */
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  padding-top: 0;
+  border-top: 1px dashed transparent;
+  transition: max-height .38s var(--ease-out), opacity .28s ease,
+              padding-top .38s var(--ease-out), border-top-color .3s ease;
+}
+
+.details.open {
+  max-height: 1100px;          /* 实际内容约 600–700px，留余量；动画无填充态，轮询恢复不播 */
+  opacity: 1;
+  padding-top: 9px;
+  border-top-color: var(--glass-line-soft);
+  animation: none;             /* 覆盖 style.css 的 rise，开合只走 transition */
+}
+
+/* ---------- 整批收起 / 展开：短促归拢，恢复自然 ---------- */
+
+.results-shell {
+  display: grid;
+  grid-template-rows: 1fr;
+  padding: 10px;               /* 容纳卡片 hover 上移与阴影，避免被折叠裁切波及 */
+  margin: -10px;
+  transition: grid-template-rows .32s var(--ease-out), opacity .26s ease,
+              transform .32s var(--ease-out);
+}
+
+.results-shell > .results { min-height: 0; overflow: hidden; }
+
+/* app.js 仍只切换 .results 的 .collapsed 类；折叠由外壳行高动画完成 */
+.results.collapsed { display: grid; }      /* 覆盖 style.css 的 display:none */
+.results.collapsed .card { visibility: hidden; }
+
+.results-shell:has(> .results.collapsed) {
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transform: translateY(-10px) scale(.99);
+}
+
+/* ---------- 静态 / 减少动态降级：完整可用，光影静帧 ---------- */
+
+body.fx-still .card::before,
+body.fx-still .cabin::before { animation-play-state: paused; }
+body.fx-still .card.fx-rise,
+body.fx-still .card.fx-rise-now { animation: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .card::before, .cabin::before { animation: none !important; }
+  .tide-flash.play::before { animation: none !important; }
+  .card.fx-rise, .card.fx-rise-now { animation: none !important; }
+  .details, .results-shell { transition: none !important; }
+}
+
+/* 卡片 overflow:hidden 会裁掉焦点框，改为内缩保持可见 */
+.card :focus-visible { outline-offset: -2px; }

@@ -12,8 +12,13 @@ connection-error.log
 
 # 运行时状态（本机生成，不随仓库走）
 results/rate_limit_state.json
+results/rate_limit_state.json.lock
 results/coingecko_caps.json
 results/*.tmp
+
+# 大体积状态快照（数百 MB，GitHub 会直接拒绝 >100MB 文件）
+backup_*/*.before_onboard
+backup_*/*.journal.jsonl*
 
 # AI 工具临时产物
 .trae-html-share-packages/

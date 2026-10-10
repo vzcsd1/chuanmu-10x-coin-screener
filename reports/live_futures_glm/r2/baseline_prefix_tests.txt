@@ -1,0 +1,29 @@
+# R2 修复前基线（2026-10-07，共享文件摘要 4fbeff67…，ds 编辑中）
+# 说明：R2* 项的 FAIL/ERROR 是预期红（待 glm 接手实现）；
+# S 系列与 request_accounting 的 FAIL 源于 ds 正在进行的额度改造（尚未定型，不作为最终审核依据）；
+# r1 上午基线（摘要 9583c924…）为 12/12 全绿，见 reports/live_futures_glm/summary.md。
+# 完整输出：py -3.10 -B -m unittest tests.test_live_futures_acceptance_glm
+
+ERROR:root:failed scoring DOGE/USDT
+ERROR: test_r2_real_top_ratio_still_scores (tests.test_live_futures_acceptance_glm.R2FallbackScoringTests)
+ERROR: test_r2_as_of_min_not_max (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+ERROR: test_r2_complete_data_no_candidates_is_normal (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+ERROR: test_r2_summary_complete_round (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+ERROR: test_r2_summary_mid_scan_pause (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+ERROR: test_r2_summary_no_client_expected_unknown (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+ERROR: test_ui_old_list_payload_round_unknown (tests.test_live_futures_acceptance_glm.R2UiPayloadTests)
+FAIL: test_request_accounting_no_cache (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_s1_futures_init_failure_masks_round (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_s2_mid_scan_futures_pause (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_s3_field_missing_partial (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_s3b_fallback_caliber_scores (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_s6_legit_zero_values (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_s7_cache_serves_ok_during_outage (tests.test_live_futures_acceptance_glm.LiveFuturesAcceptanceTests)
+FAIL: test_r2_fallback_display_only_not_scored (tests.test_live_futures_acceptance_glm.R2FallbackScoringTests)
+FAIL: test_r2_all_coins_failed_is_incomplete_not_empty (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+FAIL: test_r2_cards_look_complete_but_dropped_coin_hidden (tests.test_live_futures_acceptance_glm.R2RoundSummaryTests)
+FAIL: test_ui_dict_payload_incomplete (tests.test_live_futures_acceptance_glm.R2UiPayloadTests)
+FAIL: test_ui_dict_payload_with_round (tests.test_live_futures_acceptance_glm.R2UiPayloadTests)
+
+# 交接后复核（摘要 34357e35…）：旧 S 系列 12 项全绿，失败集=恰好 11 项 R2 待实现（5 FAIL + 6 ERROR）。
+# 基线中旧 S 失败为 ds 编辑窗口暂态，不作为 ds 最终补丁的缺陷证据。

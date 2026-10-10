@@ -1,0 +1,6 @@
+WARNING:root:futures|direct 被限流/封禁：暂停至 2026-10-07 16:37:21（new pause）
+WARNING:root:OKX 客户端不可用: 测试离线
+WARNING:root:OKX 客户端不可用: 测试离线
+NEW_PAUSE_PRESERVED True
+short True None ok 1700716400000
+old True 0.4320442784916434 ok 1700716400000

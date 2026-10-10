@@ -283,12 +283,14 @@ void main(){
   const aim = { x: 0, y: 0, tx: 0, ty: 0 };
   let driftT = Math.random() * 100;
 
-  // 自适应画质
+  // 自适应画质：持续窗口化评估（降快升慢、最小间隔防抖），不再是一次性判定
   let resScale = 1.0;
   let detail = 1.0;
-  let perfAccum = 0;
-  let perfCount = 0;
-  let perfChecked = false;
+  let perfFrames = 0, perfAccum = 0;
+  let lastAdapt = 0;          // 上次调整时刻；init 时设为启动静默期，避免加载忙时误降
+  const PERF_WIN = 120;       // 每窗口统计帧数（~2s）
+  const ADAPT_GAP = 8000;     // 相邻调整最小间隔，防频繁升降
+  const RAISE_GAP = 30000;    // 升档需距上次调整更久，升慢
 
   function compile(type, src) {
     const sh = gl.createShader(type);
@@ -347,22 +349,30 @@ void main(){
     gl.uniform1f(uni.uDetail, detail);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // 前 150 帧实测掉帧 → 自动降档（只降一次，不反复）
-    if (!perfChecked && rendering) {
-      if (lastFrameT) {
-        perfAccum += nowMs - lastFrameT;
-        perfCount++;
-        if (perfCount >= 150) {
-          const avg = perfAccum / perfCount;
-          if (avg > 24 && resScale > 0.6) {
+    // 持续性能自适应：窗口化统计帧间隔。先快降保流畅（>24ms 即降），
+    // 确有富余且稳定一段时间再慢升（<17.2ms，距上次调整 ≥30s）。
+    // 跳过 dt>250ms 的帧（后台恢复/极端尖峰），避免污染窗口统计。
+    if (rendering && lastFrameT) {
+      const dt = nowMs - lastFrameT;
+      if (dt < 250) {
+        perfFrames++;
+        perfAccum += dt;
+        if (perfFrames >= PERF_WIN && nowMs - lastAdapt >= ADAPT_GAP) {
+          const avg = perfAccum / perfFrames;
+          if (avg > 24 && (resScale > 0.6 || detail > 0.6)) {
             resScale = Math.max(0.6, resScale - 0.2);
             detail = Math.max(0.6, detail - 0.2);
             resize();
-            console.info(`[观潮] 平均帧耗时 ${avg.toFixed(1)}ms，已自动降低渲染分辨率至 ${resScale}`);
-            perfAccum = 0; perfCount = 0; // 给降档后再测一轮的机会
-          } else {
-            perfChecked = true;
+            console.info(`[观潮] 窗口平均帧耗时 ${avg.toFixed(1)}ms，已降低渲染分辨率至 ${resScale}`);
+            lastAdapt = nowMs;
+          } else if (avg < 17.2 && resScale < 1.0 && nowMs - lastAdapt >= RAISE_GAP) {
+            resScale = Math.min(1.0, resScale + 0.1);
+            detail = Math.min(1.0, detail + 0.1);
+            resize();
+            console.info(`[观潮] 帧率持续富余，恢复渲染分辨率至 ${resScale}`);
+            lastAdapt = nowMs;
           }
+          perfFrames = 0; perfAccum = 0; // 无论是否调整都重开窗口，避免陈旧样本累积
         }
       }
     }
@@ -403,6 +413,7 @@ void main(){
       uni[name] = gl.getUniformLocation(prog, name);
     }
     startT = performance.now();
+    lastAdapt = startT + 6000; // 启动静默期：加载/编译 shader/首帧忙时不评估降档
     resize();
     window.addEventListener("resize", resize);
     document.addEventListener("visibilitychange", () => {

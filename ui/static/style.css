@@ -283,6 +283,48 @@ body.sea-on #sea { opacity: 1; }
 
 .results-count { color: var(--ink-faint); font-size: 13px; }
 
+/* 整批结果收起/展开：放在结果头里，与过滤框同一行
+   （顺序：标题 → 计数 → 折叠开关 → 过滤 → …靠 margin-left:auto 把过滤推到最右） */
+.collapse-btn {
+  border: 1px solid var(--glass-line-soft);
+  background: rgba(12, 30, 48, .5);
+  color: var(--ink-soft);
+  font-size: 12.5px;
+  letter-spacing: .05em;
+  padding: 4px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex: none;
+  transition: border-color .15s ease, color .15s ease, background .15s ease;
+}
+
+.collapse-btn:hover {
+  border-color: rgba(76, 194, 188, .5);
+  color: var(--teal-bright);
+  background: rgba(76, 194, 188, .1);
+}
+
+.collapse-btn::before {
+  content: "▾";
+  display: inline-block;
+  margin-right: 6px;
+  font-size: 11px;
+  transition: transform .2s ease;
+}
+
+.collapse-btn[aria-expanded="false"]::before { transform: rotate(-90deg); }
+
+/* 收起态：结果区不占位（省着滚动看「海」），但节点仍在，展开即恢复 */
+.results.collapsed { display: none; }
+
+/* 收起后给一行提示，避免读者误以为本轮没有候选 */
+.collapsed-note {
+  margin: 0 0 13px;
+  font-size: 12.5px;
+  color: var(--ink-faint);
+}
+
 .badge-stale {
   font-size: 12px;
   color: var(--amber);
@@ -591,3 +633,8 @@ body.panel-on .site-foot { position: static; pointer-events: auto; }
   #filter { width: 120px; }
   .stage-title { letter-spacing: .22em; text-indent: .22em; }
 }
+
+/* R2 整轮摘要行（状态展示，非动效）：完整=安静，不完整=警示但不喧哗 */
+.round-line { font-size: 12px; line-height: 1.5; margin-top: 2px; }
+.round-line.round-ok { color: var(--ink-3, #8fa3b8); }
+.round-line.round-warn { color: #e8b96b; }

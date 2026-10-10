@@ -261,13 +261,21 @@ class RequestsFetcher:
             if code != 200:
                 raise FetchError(f"HTTP {code}")
             buf = bytearray()
-            for chunk in r.iter_content(65536):
-                if not chunk:
-                    continue
-                buf += chunk
-                if max_bytes is not None and len(buf) > max_bytes:
-                    raise ByteBudgetExceeded(
-                        f"超过字节预算（已读 {len(buf)} > {max_bytes}）")
+            # 读取阶段的异常必须和连接阶段一样包装成 FetchError：
+            # 否则 ConnectionError/ReadTimeout 会裸奔出 fetch_one 的 except 链，
+            # 经线程池 ex.map() 把整轮下载打死。包装后走既有的「重试→记网络失败」路径。
+            try:
+                for chunk in r.iter_content(65536):
+                    if not chunk:
+                        continue
+                    buf += chunk
+                    if max_bytes is not None and len(buf) > max_bytes:
+                        raise ByteBudgetExceeded(
+                            f"超过字节预算（已读 {len(buf)} > {max_bytes}）")
+            except ByteBudgetExceeded:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise FetchError(f"读取中断 {type(exc).__name__}: {exc}") from exc
             return Resp(code, headers, bytes(buf))
         finally:
             try:
@@ -343,6 +351,7 @@ class Entry:
 # 正式路径只放"来源校验值已确认（或来源确认没发布校验值）"的文件；
 # 待复核字节单独放，恢复后**只补一次校验请求**，通过就提升为正式文件、不重下整份。
 PENDING_SUFFIX = ".pending"
+PART_SUFFIX = ".part"
 
 
 def official_path_for(out_dir: str | Path, entry: Entry) -> Path:
@@ -352,6 +361,23 @@ def official_path_for(out_dir: str | Path, entry: Entry) -> Path:
 def pending_path_for(out_dir: str | Path, entry: Entry) -> Path:
     target = Path(out_dir) / entry.relpath()
     return target.with_name(target.name + PENDING_SUFFIX)
+
+
+def part_path_for(out_dir: str | Path, entry: Entry) -> Path:
+    """**内容异常时留证的原始字节**路径（正式路径 + `.part`）。
+
+    与 `.pending` 语义严格不同，别混用：
+
+    | 后缀 | 何时写 | 含义 |
+    |---|---|---|
+    | `.pending` | 校验值**暂时取不到**（限流/网络） | 归档已收到、只差校验，恢复后只补校验 |
+    | `.part` | 内容异常（校验不符 / 结构不符） | 原始字节留证待查，**默认不参与任何流程** |
+
+    `.part` 只在显式打开 `Options.reuse_parts` 时才被读取，
+    且读到的字节**必须重走完整校验**才可能转正——复用不等于放行。
+    """
+    target = Path(out_dir) / entry.relpath()
+    return target.with_name(target.name + PART_SUFFIX)
 
 
 def load_manifest(path: str | Path) -> list[Entry]:
@@ -922,6 +948,10 @@ class Options:
     # 上一次 `run_fetch` 实际发出的 HTTP 请求数（含 ZIP / CHECKSUM / 重试 / 恢复探测）。
     # 队列工具用它统计"请求数"，不另开计数池。
     last_request_count: int = 0
+    # **`.part` 复用**（默认关闭）：打开后，正式文件与 `.pending` 都不在时，
+    # 若存在留证用的 `.part`，就读本地字节代替下载 ZIP——但**校验一步不少**，
+    # 校验不过仍是 `content_anomaly`（不转正）。关闭时行为与旧版完全一致。
+    reuse_parts: bool = False
 
 
 class InflightGate:
@@ -1125,8 +1155,82 @@ class Downloader:
         return pending
 
     # —— 单份下载 ——
+    def _try_reuse_part(self, entry: Entry, state: "State") -> dict[str, Any] | None:
+        """`.part` 复用：命中则**不发 ZIP 请求**，直接走既有校验链路。
+
+        返回 `None` 表示未复用（未开关 / 无 `.part` / 读失败），调用方继续正常下载。
+
+        三条硬约束，写在代码里而不是文档里：
+
+        1. **只在 `reuse_parts` 打开时生效**——默认关闭，旧行为零变化。
+        2. **不绕过任何校验**：`_checksum` + `inspect_content` 一步不少，
+           判定结果与"刚从网络下载到同样字节"完全一致。
+        3. **不自己宣布成功**：`_record` 的 status 由同一套结论（`CHECK_CONCLUSIVE`）
+           推导，所以校验不符时仍落 `content_anomaly`，**不会被算成完成**。
+        """
+        if not getattr(self.opts, "reuse_parts", False):
+            return None
+        part = part_path_for(self.opts.out_dir, entry)
+        try:
+            if not part.exists():
+                return None
+            content = part.read_bytes()
+        except OSError as exc:
+            # 读不了就当作没命中，走正常下载——绝不因为"本地读失败"而丢一项
+            return self._record(entry, S_TRANSIENT,
+                                note=f"复用 .part 失败（{type(exc).__name__}: {exc}），"
+                                     f"未发 ZIP 请求，下次重试")
+        if not content:
+            return None   # 空文件没有复用价值，回退到正常下载
+
+        # 与下载完成后的路径**逐行一致**（唯一区别：字节来自本地而非网络）
+        try:
+            ck_status, ck_value, ck_note = self._checksum(
+                entry, sha256_hex(content), state)
+        except Paused as exc:
+            # 校验被限流暂停拦下：字节已在 `.part`，无需再写一份 `.pending`
+            return self._record(entry, S_PAUSED, bytes_=len(content),
+                                checksum=CHECK_FETCH_FAILED, path=str(part),
+                                note=f"复用 .part；处于限流暂停未发校验请求：{exc}")
+        except RateLimited as exc:
+            state.set_pause(host_of(entry.source_url), exc.until_ms,
+                            f"校验端点限流：{exc}")
+            return self._record(entry, S_PAUSED, bytes_=len(content),
+                                checksum=CHECK_FETCH_FAILED, path=str(part),
+                                note=f"复用 .part；校验端点限流已登记暂停：{exc}")
+
+        if ck_status == CHECK_MISMATCH:
+            return self._record(entry, S_ANOMALY, bytes_=len(content),
+                                checksum=ck_status, checksum_value=ck_value,
+                                note=f"复用 .part：{ck_note}；字节保留待查")
+
+        ok, note = inspect_content(entry, content)
+        if not ok:
+            return self._record(entry, S_ANOMALY, bytes_=len(content),
+                                checksum=ck_status, checksum_value=ck_value,
+                                note=f"复用 .part 内容异常：{note}")
+
+        path = self._write(entry, content, ck_value)
+        # 复用**不算**"来源已恢复"：这里不解除暂停、不重置退避档位，
+        # 因为本轮一次网络请求都没发，没有任何新证据说明来源可用。
+        status = S_SUCCESS if ck_status in CHECK_CONCLUSIVE else S_UNVERIFIED
+        return self._record(entry, status, bytes_=len(content),
+                            checksum=ck_status, checksum_value=ck_value,
+                            note=f"复用 .part 转正；{note}；{ck_note}", path=str(path))
+
+    # —— 单份下载 ——
     def fetch_one(self, entry: Entry, budget: Budget, state: State) -> dict[str, Any]:
         host = host_of(entry.source_url)
+
+        # ⓪ `.part` 复用（**默认关闭**）：留证字节已在本地 → 不发 ZIP 请求。
+        # 关键：只跳过"下载"这一步，后面的校验链路一字不改。所以
+        #   * 校验通过 → 与"刚下载完"走完全相同的 _write 转正路径；
+        #   * 校验不过 → 仍旧回到下面同一条 S_ANOMALY 分支（不转正）。
+        # 预算不预扣下载字节：复用不占网络在途内存（读本地是小块流式）。
+        reuse = self._try_reuse_part(entry, state)
+        if reuse is not None:
+            return reuse
+
         attempts = 0
         last_error = ""
         while attempts < max(1, self.opts.retries + 1):
@@ -1302,6 +1406,8 @@ def run_fetch(entries: list[Entry], opts: Options,
                 if pending_path_for(out_dir, e).exists():
                     recheck.append(e)
                 else:
+                    # 走 download 分支：`fetch_one` 内部会先探 `.part`，
+                    # 命中就直接复用（不发 ZIP 请求），未命中才真正下载。
                     todo.append(e)
                 continue
             expected = local_digest_for(state, e)
@@ -1527,6 +1633,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_fetch.add_argument("--force", action="store_true")
     p_fetch.add_argument("--workers", type=int, default=1,
                          help="并发路数；1=单连接（旧行为）。多路共享总节奏/预算/暂停")
+    p_fetch.add_argument("--reuse-parts", action="store_true",
+                         help="复用留证用的 .part：命中则不发 ZIP 请求，"
+                              "但校验一步不少（不过仍记 content_anomaly）。默认关闭")
     return ap
 
 
@@ -1571,7 +1680,7 @@ def main(argv: list[str] | None = None) -> int:
                    max_minutes=args.max_minutes, min_free_gib=args.min_free_gib,
                    interval_sec=args.interval_sec, timeout=args.timeout,
                    retries=args.retries, force=args.force, dry_run=args.dry_run,
-                   workers=args.workers)
+                   workers=args.workers, reuse_parts=bool(args.reuse_parts))
     results, summary = run_fetch(entries, opts)
     if results and args.status_csv:
         # 导出累计状态（不是只导本轮），避免后一轮 skipped_complete 抹掉校验信息

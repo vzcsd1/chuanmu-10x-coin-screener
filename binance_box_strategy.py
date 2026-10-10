@@ -12,6 +12,7 @@ import logging
 import math
 import os
 import re
+import threading
 import time
 import traceback
 import unicodedata
@@ -327,6 +328,140 @@ def parse_ban_until(message: Any) -> int:
     return 0
 
 
+def _lock_fh(fh) -> None:
+    """对已打开的文件句柄加排他锁（阻塞式）。"""
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_fh(fh) -> None:
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+class _StateLock:
+    """跨进程互斥：把状态文件的「读—查—改—写」保护成一个不可插入的动作。
+
+    两层锁：
+      · 进程内 —— 按状态文件路径共享的 `threading.RLock`，让**同一进程内的不同实例**
+        也互斥（不能只靠 OS 文件锁，Windows 的字节区间锁语义在同进程多句柄下不可靠）。
+      · 跨进程 —— 旁路锁文件 + 操作系统文件锁（Windows `msvcrt.locking` /
+        POSIX `fcntl.flock`）。选它而不是 `O_CREAT|O_EXCL`，是因为内核会在进程崩溃时
+        自动释放锁，不会留下陈旧锁。
+
+    **可重入**：用线程本地计数记录本线程已持有的路径。同一线程再次进入同一路径时只加
+    计数、不重复申请锁，因此"锁内再调另一个会加锁的方法"不会自锁死。
+    `path` 为 None（内存模式/测试）时是 no-op。
+    """
+
+    _path_locks: dict[str, threading.RLock] = {}
+    _registry_guard = threading.Lock()
+    _held = threading.local()
+
+    def __init__(self, path, timeout: float = 20.0):
+        self._path = Path(str(path) + ".lock") if path else None
+        self._key = str(self._path.resolve()).lower() if self._path else None
+        self._timeout = timeout
+        self._fh = None
+        self._rlock = None
+        self._reentrant = False
+
+    @classmethod
+    def _held_map(cls) -> dict:
+        m = getattr(cls._held, "paths", None)
+        if m is None:
+            m = {}
+            cls._held.paths = m
+        return m
+
+    @classmethod
+    def _thread_lock(cls, key: str) -> threading.RLock:
+        with cls._registry_guard:
+            lock = cls._path_locks.get(key)
+            if lock is None:
+                lock = threading.RLock()
+                cls._path_locks[key] = lock
+            return lock
+
+    def __enter__(self):
+        if self._path is None:
+            return self
+        held = self._held_map()
+        if held.get(self._key):
+            # 本线程已持有该路径：只加计数，避免重复申请 OS 锁造成自锁死
+            held[self._key] = held[self._key] + 1
+            self._reentrant = True
+            return self
+        self._rlock = self._thread_lock(self._key)
+        self._rlock.acquire()
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._fh = open(self._path, "a+b")
+            deadline = time.monotonic() + self._timeout
+            while True:
+                try:
+                    _lock_fh(self._fh)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.02)
+        except BaseException:
+            if self._fh is not None:
+                self._fh.close()
+                self._fh = None
+            self._rlock.release()
+            self._rlock = None
+            raise
+        held[self._key] = 1
+        self._reentrant = False
+        return self
+
+    def __exit__(self, *exc):
+        if self._key is None:
+            return False
+        held = self._held_map()
+        if self._reentrant:
+            depth = held.get(self._key, 1) - 1
+            if depth > 0:
+                held[self._key] = depth
+            else:
+                held.pop(self._key, None)
+            self._reentrant = False
+            return False
+        if self._fh is not None:
+            try:
+                _unlock_fh(self._fh)
+            finally:
+                self._fh.close()
+                self._fh = None
+        held.pop(self._key, None)
+        if self._rlock is not None:
+            self._rlock.release()
+            self._rlock = None
+        return False
+
+
+def _sleep_interruptible(seconds: float, step: float = 1.0) -> None:
+    """分段睡眠：让 Ctrl+C / 外部中断在 1 秒内生效，而不是卡满整个等待。"""
+    end = time.monotonic() + max(0.0, seconds)
+    while True:
+        remain = end - time.monotonic()
+        if remain <= 0:
+            return
+        time.sleep(min(step, remain))
+
+
 class RateLimitState:
     """分域限流暂停状态：JSON 落盘、每次判断前重读，同机多进程共享同一份。
 
@@ -336,6 +471,10 @@ class RateLimitState:
     def __init__(self, path: str | os.PathLike | None):
         self.path = Path(path) if path else None
         self.domains: dict[str, dict[str, Any]] = {}
+        # /futures/data/* 滑动窗口：出口标识 -> 窗口内请求时间戳（毫秒）。
+        # 用滑动窗口而非固定窗口，是为了在任意连续 5 分钟窗口内都不超预算
+        # （固定窗口在边界处允许双突发）。
+        self.data_quota: dict[str, list[int]] = {}
 
     @classmethod
     def load(cls, path: str | os.PathLike | None) -> "RateLimitState":
@@ -352,6 +491,12 @@ class RateLimitState:
                         "paused_since_ms": int(item.get("paused_since_ms") or 0),
                         "reason": str(item.get("reason") or "")[:200],
                     }
+                quota = raw.get("data_quota")
+                if isinstance(quota, dict):
+                    state.data_quota = {
+                        str(egress): [int(t) for t in hits]
+                        for egress, hits in quota.items() if isinstance(hits, list)
+                    }
         except Exception:
             logging.warning("限流状态文件 %s 无法读取，按无暂停处理（fail-open）",
                             state.path, exc_info=True)
@@ -359,19 +504,33 @@ class RateLimitState:
         return state
 
     def reload(self) -> None:
-        """吸收同机其它进程的写入；无文件时是空操作。"""
+        """吸收同机其它进程的写入（暂停表与额度窗口一起同步）；无文件时是空操作。"""
         if self.path is None:
             return
         fresh = RateLimitState.load(self.path)
         self.domains = fresh.domains
+        self.data_quota = fresh.data_quota
 
     def save(self) -> None:
+        """把当前内存快照整表写盘（加锁；原子替换）。
+
+        ⚠️ 这是**底层写**：它不合并磁盘上的其它实例改动。并发场景请改用语义方法
+        （`record_pause` / `mark_probe` / `clear` / `clear_if_expired` /
+        `reserve_data_request`）——它们会在锁内**重新读取、合并、再写**，
+        不会用旧副本覆盖别人刚登记的新暂停或额度。`save()` 只用于播种/单实例收尾。
+        """
+        with self.locked():
+            self._write_locked()
+
+    def _write_locked(self) -> None:
+        """在**已持锁**的前提下写盘（内部使用，勿在锁外直接调用）。"""
         if self.path is None:
             return
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".tmp")
-            tmp.write_text(json.dumps({"domains": self.domains}, ensure_ascii=False, indent=1),
+            payload = {"domains": self.domains, "data_quota": self.data_quota}
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
                            encoding="utf-8")
             tmp.replace(self.path)
         except Exception:
@@ -397,33 +556,111 @@ class RateLimitState:
         return int((self.domains.get(key) or {}).get("banned_until_ms", 0))
 
     def record_pause(self, key: str, until_ms: int, reason: str, now: int | None = None) -> None:
+        """登记一次暂停。锁内**重读磁盘最新**后按"期限只延长不缩短"合并，再写回。
+
+        只在旧副本上 `max` 再整表保存，会把另一个实例刚登记的更晚暂停覆盖掉——
+        所以必须先把磁盘快照读进来，再和本次期限取最晚。
+        """
         now = _now_ms() if now is None else now
         until = int(until_ms) if until_ms and until_ms > now else now + DEFAULT_BAN_BACKOFF_MS
         note = str(reason or "")[:200]
         if not (until_ms and until_ms > now):
             note = f"未解析到恢复时间，暂按 {DEFAULT_BAN_BACKOFF_MS // 60_000} 分钟退让；{note}"
-        item = self.domains.setdefault(key, {})
-        # 期限只延长不缩短：同一域已有更晚的暂停时，短暂停不得把它提前放行
-        # （否则一次晚到的短 Retry-After 会让本应继续等待的出口提前重试）。
-        previous = int(item.get("banned_until_ms") or 0)
-        effective = max(previous, until)
-        item.update({"banned_until_ms": effective,
-                     "paused_since_ms": item.get("paused_since_ms") or now,
-                     "probe_at_ms": 0, "reason": note})
+        with self.locked():
+            self.reload()
+            item = self.domains.setdefault(key, {})
+            # 期限只延长不缩短：同一域已有更晚的暂停时，短暂停不得把它提前放行
+            # （否则一次晚到的短 Retry-After 会让本应继续等待的出口提前重试）。
+            previous = int(item.get("banned_until_ms") or 0)
+            effective = max(previous, until)
+            item.update({"banned_until_ms": effective,
+                         "paused_since_ms": item.get("paused_since_ms") or now,
+                         "probe_at_ms": 0, "reason": note})
+            self._write_locked()
         logging.warning("%s 被限流/封禁：暂停至 %s（%s）", key, human_ts(effective), note)
-        self.save()
 
     def mark_probe(self, key: str, now: int | None = None) -> None:
+        """登记一次恢复探测（锁内重读后只更新 probe 字段，不动别人的暂停期限）。"""
         now = _now_ms() if now is None else now
-        item = self.domains.setdefault(key, {})
-        item.setdefault("paused_since_ms", now)
-        item["probe_at_ms"] = now
-        self.save()
+        with self.locked():
+            self.reload()
+            item = self.domains.setdefault(key, {})
+            item.setdefault("paused_since_ms", now)
+            item["probe_at_ms"] = now
+            self._write_locked()
 
     def clear(self, key: str) -> None:
-        if key in self.domains:
+        """无条件清除（兼容保留）。锁内重读后按磁盘最新状态删除。"""
+        with self.locked():
+            self.reload()
+            if key in self.domains:
+                del self.domains[key]
+                self._write_locked()
+
+    def clear_if_expired(self, key: str, now: int | None = None) -> bool:
+        """只在暂停**已到期**时清除该域。
+
+        晚到的成功只能证明"自己那次请求通了"，不能证明等待期间由其他请求或
+        其他进程登记的新暂停也解除了——所以判定必须基于**磁盘上的最新期限**，
+        而不是本实例内存里的旧副本；未到期的暂停一律不动、不写盘。
+        """
+        now = _now_ms() if now is None else now
+        with self.locked():
+            self.reload()
+            item = self.domains.get(key)
+            if not item:
+                return False
+            until = int(item.get("banned_until_ms") or 0)
+            if until and now < until:
+                return False
             del self.domains[key]
-            self.save()
+            self._write_locked()
+            return True
+
+    def locked(self):
+        """跨进程 + 跨实例互斥（可重入）；无路径时为 no-op。"""
+        return _StateLock(self.path)
+
+    def data_quota_delay_ms(self, egress: str, now: int | None = None) -> int:
+        """该出口 /futures/data/* 需要等待的毫秒数（0 = 可立即请求）。
+
+        用**滑动窗口**：只统计最近 DATA_QUOTA_WINDOW_MS 内的请求时间戳，
+        因此任意连续 5 分钟窗口内都不会超过 DATA_QUOTA_LIMIT——固定窗口在
+        边界处允许"两次各发满"的缺陷由此消除。
+        官方只写 "IP rate limit 1000 requests/5min"，未明确窗口类型与是否跨端点
+        共享；本实现按**更保守**的滑动窗口执行，并把本地预算压到官方额度的 60%。
+        """
+        now = _now_ms() if now is None else now
+        cutoff = now - DATA_QUOTA_WINDOW_MS
+        hits = [t for t in (self.data_quota.get(egress) or []) if t > cutoff]
+        if len(hits) < DATA_QUOTA_LIMIT:
+            return 0
+        return hits[0] + DATA_QUOTA_WINDOW_MS - now
+
+    def note_data_request(self, egress: str, now: int | None = None) -> None:
+        """登记一次 /futures/data/* 请求（仅内存；落盘请用 reserve_data_request）。"""
+        now = _now_ms() if now is None else now
+        cutoff = now - DATA_QUOTA_WINDOW_MS
+        hits = [t for t in (self.data_quota.get(egress) or []) if t > cutoff]
+        hits.append(now)
+        self.data_quota[egress] = hits
+
+    def reserve_data_request(self, egress: str, now: int | None = None) -> int:
+        """检查额度并**预约**一次请求：0 = 已预约并已落盘；>0 = 需要等待的毫秒。
+
+        整个「读—查—预约—保存」在**跨进程锁内**完成，且先 `reload()` 吸收其它
+        实例/进程刚登记的额度，再判断——否则两个实例会各自基于旧快照放行（丢失更新）。
+        只加 Python 内存锁、或各自整表写 JSON，都不算跨进程正确。
+        """
+        now = _now_ms() if now is None else now
+        with self.locked():
+            self.reload()
+            delay = self.data_quota_delay_ms(egress, now)
+            if delay > 0:
+                return delay
+            self.note_data_request(egress, now)
+            self._write_locked()
+            return 0
 
 
 class DomainPaused(Exception):
@@ -452,8 +689,9 @@ class RequestGuard:
         except _LIMIT_ERRORS as exc:
             self.state.record_pause(key, parse_ban_until(exc), f"{type(exc).__name__}: {exc}")
             raise
-        if key in self.state.domains:
-            self.state.clear(key)
+        # 晚到的成功只证明"自己这次通了"：若等待期间其他请求/进程登记了更晚的
+        # 暂停，这里绝不能顺手抹掉——只在暂停**确已到期**时才清除。
+        self.state.clear_if_expired(key)
         return result
 
 
@@ -499,8 +737,8 @@ def _connect_domain(domain: str, default_type: str, cfg: Config, attempts: int,
                 print(f"连接币安 {domain}（{mode}，第 {attempt}/{attempts} 次）...")
                 exchange = build_exchange(candidate, default_type)
                 exchange.load_markets()
-                if key in state.domains:
-                    state.clear(key)
+                # 同理：连接成功不代表别的进程刚登记的暂停已解除，只清已到期的。
+                state.clear_if_expired(key)
                 return exchange, candidate
             except _LIMIT_ERRORS as exc:
                 last_error = exc
@@ -680,6 +918,16 @@ DERIV_LOOKBACK = 200  # 1h × 200 ≈ 8.3 天，覆盖 3 日增速所需窗口
 DERIV_CACHE_BUCKET_MS = 3_600_000  # 数据是 1h 粒度：按小时对齐缓存，一小时内复用
 _DERIV_CACHE: dict[tuple[str, int], dict[str, Any]] = {}
 
+# /futures/data/* 是**独立额度**（2026-10-07 官方 legacy 文档核实）：
+#   openInterestHist / topLongShortPositionRatio / globalLongShortAccountRatio
+#   三个端点 Request Weight 均为 **0**（不占 /fapi/v1 的 2400 权重），
+#   但共享一条「IP rate limit 1000 requests/5min」。
+# ccxt 的 enableRateLimit 只保证 ≥50ms/请求，**完全不知道**这条规则。
+# 单轮扫描就要发约 2N 次（N≈218 → 436 次），5 分钟内跑 3 轮即超限 →
+# 429 →（若继续请求）418 封禁。这里按 60% 额度自限，给共享出口留余量。
+DATA_QUOTA_LIMIT = 600
+DATA_QUOTA_WINDOW_MS = 5 * 60_000
+
 
 def clear_deriv_cache() -> None:
     _DERIV_CACHE.clear()
@@ -720,14 +968,38 @@ def fetch_deriv_context(futures: ccxt.binance, symbol: str, cfg: Config,
 
 def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
                               guard: "RequestGuard | None" = None) -> dict[str, Any]:
+    # ls_top 只允许「大户持仓比」口径（topLongShortPositionRatio，被回测验证）。
+    # 账户数比（全市场或大户账户）一律进 ls_global 仅作展示，不参与 ls_top 计分——
+    # 这是 REASONING.md C4 的既有语义（R2 落地，2026-10-07），不改权重与阈值。
+    # R3（2026-10-07）：ok 的定义收紧为「评分所需字段全部可计算」（oi_chg_1d/3d、
+    # ls_top），并保留**每个字段实际采用的数据时间**（oi_as_of/ls_as_of）与
+    # 「源数据里比采用点更新但不可用的尾部观测数」（oi/ls_stale_tail）——
+    # 合法零值、历史不足、接口失败、陈旧数据四者据此区分，不设统一时效阈值。
     out: dict[str, Any] = {"oi_chg_1d": None, "oi_chg_3d": None,
                            "ls_top": None, "ls_chg_3d": None, "ls_source": None,
+                           "ls_global": None,
+                           "oi_as_of": None, "ls_as_of": None,
+                           "oi_stale_tail": 0, "ls_stale_tail": 0,
                            "status": "failed", "as_of": None}
     market_id = futures.market(symbol)["id"]
 
     def call(fn, *args, **kwargs):
         if guard is None:
             return fn(*args, **kwargs)
+        # /futures/data/* 与 /fapi/v1 权重无关，走独立的 1000/5min 额度：
+        # 额度用满先等到窗口重置，避免 429 之后继续请求升级成 418 封禁。
+        # reserve_data_request 自带跨进程锁，并在锁内**重读磁盘最新**后再判断/预约，
+        # 所以「读—查—预约—保存」对外是一个不可被其它实例插入的动作。
+        # 等待用分段睡眠，结束后回到循环顶部**重新检查暂停与额度**再决定是否放行。
+        egress = guard.key(FUTURES_DOMAIN)
+        while True:
+            if not guard.state.should_attempt(egress):
+                raise DomainPaused(f"{egress} 限流暂停中（至 {human_ts(guard.state.until(egress))}）")
+            delay = guard.state.reserve_data_request(egress)  # 自带跨进程锁 + 重读最新
+            if delay <= 0:
+                break
+            logging.warning("合约数据端点额度已用满，等待 %.0f 秒后继续", delay / 1000.0)
+            _sleep_interruptible(delay / 1000.0)
         return guard.run(FUTURES_DOMAIN, fn, *args, **kwargs)
 
     as_of = 0
@@ -737,17 +1009,33 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
                    {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
         series = [(_as_float(item.get("sumOpenInterestValue"), float("nan")),
                    int(item.get("timestamp") or 0)) for item in raw]
+        raw_ts = [t for _, t in series if t]
         series = [(v, t) for v, t in series if math.isfinite(v) and v > 0 and t]
         if len(series) >= 25:
             current_value, current_ts = series[-1]
+            has_1d = has_3d = False
             for back_hours, key in ((24, "oi_chg_1d"), (72, "oi_chg_3d")):
                 cutoff = current_ts - back_hours * 3_600_000
                 past = [v for v, t in series if t <= cutoff]
                 if past and past[-1] > 0:
                     out[key] = current_value / past[-1] - 1.0
+                    if key == "oi_chg_1d":
+                        has_1d = True
+                    else:
+                        has_3d = True
             as_of = max(as_of, current_ts)
-            ok_oi = True
+            out["oi_as_of"] = current_ts
+            # 源数据里比采用点更新但不可用（零值/缺字段）的尾部观测数：合法零值
+            # 与数据缺口在此都呈现为"有更新观测却用不了"，保留事实，由上层标不完整
+            out["oi_stale_tail"] = sum(1 for t in raw_ts if t > current_ts)
+            # 1 日变化可算而 3 日不可算（历史不足）时，OI 侧不算取齐
+            ok_oi = has_1d and has_3d
     except DomainPaused:
+        out["status"] = "paused"
+        return out
+    except _LIMIT_ERRORS:
+        # 429/418 已由 guard 登记成暂停：**不再继续后面的取数分支**，
+        # 否则会在刚被封的出口上接着请求，把短封拖成长封。
         out["status"] = "paused"
         return out
     except Exception as exc:  # noqa: BLE001
@@ -759,13 +1047,10 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
         series = []
         for item in raw:
             ratio = _as_float(item.get("longShortRatio"), float("nan"))
-            if not math.isfinite(ratio):
-                long_account = _as_float(item.get("longAccount"), float("nan"))
-                short_account = _as_float(item.get("shortAccount"), float("nan"))
-                if math.isfinite(long_account) and math.isfinite(short_account) and short_account > 0:
-                    ratio = long_account / short_account
             if math.isfinite(ratio):
                 series.append((ratio, int(item.get("timestamp") or 0)))
+        raw_ls_ts = [int(item.get("timestamp") or 0) for item in raw]
+        raw_ls_ts = [t for t in raw_ls_ts if t]
         if series:
             out["ls_top"] = series[-1][0]
             out["ls_source"] = "topLongShortPositionRatio"
@@ -774,8 +1059,13 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
             if past:
                 out["ls_chg_3d"] = series[-1][0] - past[-1]
             as_of = max(as_of, series[-1][1])
+            out["ls_as_of"] = series[-1][1]
+            out["ls_stale_tail"] = sum(1 for t in raw_ls_ts if t > series[-1][1])
             ok_ls = True
     except DomainPaused:
+        out["status"] = "paused"
+        return out
+    except _LIMIT_ERRORS:
         out["status"] = "paused"
         return out
     except Exception as exc:  # noqa: BLE001
@@ -786,15 +1076,20 @@ def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
             series = [(float(item["longShortRatio"]), int(item.get("timestamp") or 0))
                       for item in raw if item.get("longShortRatio") is not None]
             if series:
-                out["ls_top"] = series[-1][0]
-                out["ls_source"] = "globalLongShortAccountRatio(回退口径)"
+                # R2（2026-10-07）：回退口径是**全市场账户比**，不是大户持仓比——
+                # 只进 ls_global 展示，绝不写入 ls_top 参与计分（C4 语义）。
+                out["ls_global"] = series[-1][0]
+                out["ls_source"] = "globalLongShortAccountRatio(回退,仅展示)"
                 cutoff = series[-1][1] - 72 * 3_600_000
                 past = [v for v, t in series if t and t <= cutoff]
                 if past:
                     out["ls_chg_3d"] = series[-1][0] - past[-1]
                 as_of = max(as_of, series[-1][1])
-                # 注意：回退口径不把 ok_ls 置真——它不是被回测验证过的大户持仓口径
+                # 回退口径不把 ok_ls 置真——它不是被回测验证过的大户持仓口径
         except DomainPaused:
+            out["status"] = "paused"
+            return out
+        except _LIMIT_ERRORS:
             out["status"] = "paused"
             return out
         except Exception as exc2:  # noqa: BLE001
@@ -852,25 +1147,34 @@ def coingecko_caps(cfg: Config, cache_path: Path | None = None) -> dict[str, flo
 
 
 def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: Config,
-                     okx: ccxt.okx | None = None) -> list[dict[str, Any]]:
+                     okx: ccxt.okx | None = None,
+                     round_stats: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     """Rank Binance symbols with the programmable parts of the Chuanmu notes.
 
     请求治理（2026-10-05）：现货域暂停时整轮跳过；合约域暂停/失败时现货照常出池，
     合约数据按 deriv_status 标注（ok/partial/failed/paused/no_futures），不假装有数据。
+
+    R2 整轮摘要（2026-10-07）：调用方传入 `round_stats` dict 时，本轮覆盖范围、
+    合约数据完整性与候选有无写入其中；不传时行为与返回值与旧版完全一致。
+    摘要覆盖入选、落选、被跳过、失败的全部原定扫描对象，不从最终卡片反推。
     """
+    stats = round_stats if round_stats is not None else {}
     guard = RequestGuard(RateLimitState.load(default_state_path(cfg)), cfg)
     spot_until = guard.state.until(guard.key(SPOT_DOMAIN))
     if spot_until and _now_ms() < spot_until:
         raise DomainPaused(f"现货域限流暂停中（至 {human_ts(spot_until)}），本轮跳过")
     tickers = guard.run(SPOT_DOMAIN, exchange.fetch_tickers)
     futures_tickers: dict[str, Any] = {}
+    domain_state = "no_client" if futures is None else "ok"
     if futures is not None:
         try:
             futures_tickers = guard.run(FUTURES_DOMAIN, futures.fetch_tickers)
         except DomainPaused:
             logging.warning("合约域限流暂停中：本轮合约数据记为缺失，现货继续扫描")
+            domain_state = "paused"
         except Exception as exc:
             logging.warning("合约行情不可用，本轮按无合约数据处理: %s", exc)
+            domain_state = "failed"
     okx_markets: dict[str, Any] = {}
     okx_tickers: dict[str, Any] = {}
     if okx is not None:
@@ -894,6 +1198,20 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             logging.warning("CoinGecko market caps unavailable: %s", exc)
     rows: list[dict[str, Any]] = []
     symbols = select_symbols(tickers, cfg, caps)
+    skipped_short_history = 0
+    skipped_short_history_symbols: list[str] = []
+    skipped_inactive = 0
+    skipped_inactive_symbols: list[str] = []
+    skipped_require_futures = 0
+    skipped_require_futures_symbols: list[str] = []
+    failed_symbols: list[str] = []
+    errors = 0
+    futures_expected = 0
+    futures_fetched_ok = 0
+    stale_rows = 0
+    oi_as_of_values: list[int] = []
+    ls_as_of_values: list[int] = []
+    deriv_counts = {"ok": 0, "partial": 0, "failed": 0, "paused": 0, "no_futures": 0}
     logging.info("扫描范围 %d 个；成交额闸门 [%s, %s]；市值上限 %s；观察门槛 %d；%s",
                  len(symbols), human_money(cfg.min_quote_volume),
                  human_money(cfg.max_quote_volume), human_money(cfg.max_market_cap),
@@ -905,16 +1223,25 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
         try:
             market = exchange.market(symbol)
             if market.get("active") is False or not market.get("spot", True):
+                # 覆盖对账（2026-10-08）：此分支原先静默 continue，导致
+                # scope_total 与 评分行+已计跳过 之间出现无解释差额。
+                # 只补记录，不改变"哪些币被跳过"。
+                skipped_inactive += 1
+                skipped_inactive_symbols.append(symbol)
                 continue
             base = market["base"]
             future_symbol = future_by_base.get(base)
             if cfg.require_futures and not future_symbol:
+                skipped_require_futures += 1
+                skipped_require_futures_symbols.append(symbol)
                 continue
             # 逐币 K 线是现货域请求：暂停时直接中止本轮（guard 不会触碰网络）
             candles = guard.run(SPOT_DOMAIN, exchange.fetch_ohlcv,
                                 symbol, cfg.timeframe, limit=cfg.lookback)
             df = indicators(candles, cfg)
             if len(df) < cfg.box_period + 3:
+                skipped_short_history += 1
+                skipped_short_history_symbols.append(symbol)
                 continue
             score, details = box_score(df, cfg)
             kline_points = score
@@ -959,6 +1286,7 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             deriv_status = "no_futures"
             deriv_as_of = None
             if future_symbol:
+                futures_expected += 1
                 try:
                     deriv = fetch_deriv_context(futures, future_symbol, cfg, guard)
                 except DomainPaused:
@@ -968,6 +1296,19 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
                     deriv = {"status": "failed"}
                 deriv_status = str(deriv.get("status") or "ok")
                 deriv_as_of = deriv.get("as_of")
+                if deriv_status == "ok":
+                    futures_fetched_ok += 1
+                    if deriv.get("oi_as_of"):
+                        oi_as_of_values.append(int(deriv["oi_as_of"]))
+                    if deriv.get("ls_as_of"):
+                        ls_as_of_values.append(int(deriv["ls_as_of"]))
+                    # R3：字段都可计算，但源数据尾部存在"比采用点更新却不可用"的
+                    # 观测（合法零值或缺口）时，无法确认新鲜度 → 保留事实、标不完整
+                    if deriv.get("oi_stale_tail") or deriv.get("ls_stale_tail"):
+                        stale_rows += 1
+                if deriv_status == "paused" and domain_state == "ok":
+                    domain_state = "paused"
+            deriv_counts[deriv_status] = deriv_counts.get(deriv_status, 0) + 1
             deriv_points, deriv_details = deriv_score(
                 deriv.get("oi_chg_1d"), deriv.get("oi_chg_3d"),
                 deriv.get("ls_top"), deriv.get("ls_chg_3d"))
@@ -1004,6 +1345,10 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
                          "open_interest_value": None, "oi_cap_ratio": None,
                          "funding_rate": None, "percentage_24h": percentage,
                          "okx_contract": okx_swap, "ls_source": deriv.get("ls_source"),
+                         "ls_global": deriv.get("ls_global"),
+                         "oi_as_of": deriv.get("oi_as_of"), "ls_as_of": deriv.get("ls_as_of"),
+                         "oi_stale_tail": deriv.get("oi_stale_tail") or 0,
+                         "ls_stale_tail": deriv.get("ls_stale_tail") or 0,
                          **details,
                          "entry": trade_levels.get("entry"), "stop": trade_levels.get("stop"),
                          "take_profit": trade_levels.get("take_profit"),
@@ -1012,6 +1357,8 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             logging.error("数据域处于限流暂停期，本轮扫描中止: %s", exc)
             raise
         except Exception:
+            errors += 1
+            failed_symbols.append(symbol)
             logging.exception("failed scoring %s", symbol)
     # 原先此处会给"24h 涨幅前十"的标的 +1 分。实测该项区分度 −0.0pp、提升倍数
     # 0.99x（纯噪音，详见文件头 WEIGHTS 上方说明），本质是奖励"已经涨过的币"，已删除。
@@ -1057,6 +1404,51 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             extra_hits.append("OI>=市值")
         row["funding_rate"] = funding_rate
         row["extra_conditions"] = ",".join(extra_hits) or "无"
+    # 注：这里**不再**做整表 save()。额度窗口的落盘已由 reserve_data_request 在
+    # 跨进程锁内逐次完成；整表回写会把本进程的陈旧副本盖回磁盘，抹掉其它进程
+    # 刚登记的预约（导致少算 → 重复放行），所以只保留逐次原子写入。
+    if round_stats is not None:
+        # R3：as_of_min = 各字段**实际采用时间**的最小值（跨字段、跨币），
+        # 不再是对"每币取过 max 的合并时间"取 min——那会掩盖同币内的字段时间差。
+        field_as_of_min = min(oi_as_of_values + ls_as_of_values) \
+            if (oi_as_of_values or ls_as_of_values) else None
+        round_stats.update({
+            "task_completed": True,          # 走到这里=未被 DomainPaused 中止
+            "scope_total": len(symbols),     # 原定扫描对象（含跳过/失败/落选）
+            # 覆盖对账（2026-10-08）：原定对象 = 评分行 + 各互斥跳过类 + 失败类；
+            # unclassified>0 表示存在未知去向类别，不得宣称全量对账。
+            "symbols_scope": list(symbols),
+            "skip_reasons": {
+                "inactive_or_non_spot": {"count": skipped_inactive,
+                                         "symbols": skipped_inactive_symbols},
+                "require_futures_missing": {"count": skipped_require_futures,
+                                            "symbols": skipped_require_futures_symbols},
+                "short_history": {"count": skipped_short_history,
+                                  "symbols": skipped_short_history_symbols},
+                "failed": {"count": errors, "symbols": failed_symbols},
+            },
+            "classified_total": (len(rows) + skipped_inactive + skipped_require_futures
+                                 + skipped_short_history + errors),
+            "unclassified": (len(symbols) - (len(rows) + skipped_inactive
+                                             + skipped_require_futures
+                                             + skipped_short_history + errors)),
+            "skipped_short_history": skipped_short_history,
+            "errors": errors,
+            "futures_expected": (None if futures is None else futures_expected),
+            "futures_fetched_ok": futures_fetched_ok,
+            "deriv_counts": deriv_counts,
+            "deriv_domain_state": domain_state,
+            "stale_rows": stale_rows,        # 字段可算但基点被尾部不可用观测顶旧的行数
+            "oi_as_of_min": min(oi_as_of_values) if oi_as_of_values else None,
+            "ls_as_of_min": min(ls_as_of_values) if ls_as_of_values else None,
+            "data_complete": (futures is not None
+                              and futures_fetched_ok == futures_expected
+                              and errors == 0 and domain_state == "ok"
+                              and stale_rows == 0),
+            "has_passing": bool(chosen),
+            "chosen_count": len(chosen),
+            "as_of_min": field_as_of_min,
+        })
     return ranked
 
 
