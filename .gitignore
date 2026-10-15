@@ -32,3 +32,9 @@ reports/**
 !reports/live_futures_glm/**
 !reports/archive_download_ds/**
 !reports/ocean_v2/assets/frames/**
+
+# Cursor/AI 工具临时笔记（本机生成）
+.cancricode/
+
+# 临时实验脚本（_scratch_* 前缀，非正式产物）
+_scratch_*.py

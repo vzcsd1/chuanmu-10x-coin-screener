@@ -4,6 +4,7 @@
 """
 from __future__ import annotations
 
+import csv
 import json
 import sys
 import tempfile
@@ -36,9 +37,11 @@ def wait_status(client, want, timeout=5.0):
 
 
 def make_manager(scan_fn, tmp: Path, demo=False, demo_rows=None, demo_delay=0.01):
+    # export_dir 一律指进 tmp：测试绝不允许写到用户真实桌面
     return ui_app.ScanManager(
         scan_fn, tmp / "last_result.json", demo=demo,
-        demo_rows=demo_rows, demo_delay=demo_delay, sleep=time.sleep)
+        demo_rows=demo_rows, demo_delay=demo_delay, sleep=time.sleep,
+        export_dir=tmp / "export")
 
 
 def test_single_flight(tmp: Path):
@@ -165,17 +168,99 @@ def test_sanitize_numpy_like():
     check("numpy 风格标量被还原", out["a"] == 1.5 and out["b"] == [None])
 
 
+def test_default_export_dir():
+    d = ui_app._desktop_result_dir()
+    check("默认导出目录 = 桌面「查询结果」",
+          d is not None and d.name == "查询结果" and d.parent.name == "Desktop",
+          f"dir={d}")
+
+
+def test_desktop_export(tmp: Path):
+    export_dir = tmp / "export"
+    rows = [
+        {"symbol": "OGN/USDT", "score": 18, "max_score": 18,
+         "conditions": "收盘>EMA50,突破箱体", "market_cap": None,
+         "symbols_scope": ["A/USDT", "B/USDT"]},
+        {"symbol": "MET/USDT", "score": 9, "max_score": 18},   # 字段更少，验证列并集
+    ]
+    mgr = ui_app.ScanManager(lambda: rows, tmp / "last_result.json",
+                             export_dir=export_dir, sleep=time.sleep)
+    client = ui_app.create_app(mgr).test_client()
+    client.post("/api/scan")
+    state = wait_status(client, "success")
+    check("导出：本轮成功", state["status"] == "success")
+    files = sorted(export_dir.glob("入选标的-*.csv"))
+    check("导出：文件夹内生成 CSV", len(files) == 1, f"files={[f.name for f in files]}")
+    if files:
+        text = files[0].read_text(encoding="utf-8-sig")
+        lines = [ln for ln in text.splitlines() if ln.strip()]
+        check("导出：表头含 symbol/score", "symbol" in lines[0] and "score" in lines[0])
+        check("导出：行数 = 表头 + 2", len(lines) == 3, f"lines={len(lines)}")
+        check("导出：中文未乱码", "收盘>EMA50" in text)
+        check("导出：列并集补齐（第二条缺的列也在表头）", "symbols_scope" in lines[0])
+        with files[0].open(encoding="utf-8-sig", newline="") as fh:
+            parsed = list(csv.DictReader(fh))
+        check("导出：列表值保留为 JSON 文本",
+              parsed[0]["symbols_scope"] == '["A/USDT", "B/USDT"]',
+              f"got={parsed[0]['symbols_scope']!r}")
+        check("导出：None 变空串", parsed[0]["market_cap"] == "",
+              f"got={parsed[0]['market_cap']!r}")
+        check("导出：第二条缺的列留空", parsed[1]["conditions"] == "",
+              f"got={parsed[1]['conditions']!r}")
+    check("导出：无残留 .tmp", not list(export_dir.glob("*.tmp")))
+
+
+def test_export_skips(tmp: Path):
+    export_dir = tmp / "export"
+
+    def csv_count():
+        return len(list(export_dir.glob("*.csv"))) if export_dir.exists() else 0
+
+    # ① 零结果不导出
+    m1 = ui_app.ScanManager(lambda: [], tmp / "lr1.json", export_dir=export_dir, sleep=time.sleep)
+    c1 = ui_app.create_app(m1).test_client(); c1.post("/api/scan"); wait_status(c1, "empty")
+    check("导出：零结果不生成文件", csv_count() == 0, f"count={csv_count()}")
+
+    # ② 扫描失败不导出
+    def boom():
+        raise RuntimeError("模拟失败")
+
+    m2 = ui_app.ScanManager(boom, tmp / "lr2.json", export_dir=export_dir, sleep=time.sleep)
+    c2 = ui_app.create_app(m2).test_client(); c2.post("/api/scan"); wait_status(c2, "failed")
+    check("导出：失败不生成文件", csv_count() == 0, f"count={csv_count()}")
+
+    # ③ 演示模式不导出（不往真实桌面写假数据）
+    m3 = ui_app.ScanManager(None, None, demo=True,
+                            demo_rows=[{"symbol": "SYN01/USDT", "score": 9}],
+                            demo_delay=0.01, export_dir=export_dir, sleep=time.sleep)
+    c3 = ui_app.create_app(m3).test_client(); c3.post("/api/scan"); wait_status(c3, "success")
+    check("导出：演示模式不写桌面", csv_count() == 0, f"count={csv_count()}")
+
+    # ④ 导出目录不可用（这里是同名文件而非目录）时，本轮结果照样成功保存
+    blocked = tmp / "blocked"
+    blocked.write_text("我是文件，不是目录", encoding="utf-8")
+    m4 = ui_app.ScanManager(lambda: [{"symbol": "X/USDT", "score": 9}], tmp / "lr4.json",
+                            export_dir=blocked, sleep=time.sleep)
+    c4 = ui_app.create_app(m4).test_client(); c4.post("/api/scan")
+    s4 = wait_status(c4, "success")
+    check("导出：目录不可用时本轮仍成功", s4["status"] == "success")
+    saved = json.loads((tmp / "lr4.json").read_text(encoding="utf-8"))
+    check("导出：目录不可用时 last_result 照常写入", saved["count"] == 1)
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory() as td:
         base = Path(td)
         for i, fn in enumerate((test_single_flight, test_zero_result_saved,
                                 test_failure_keeps_last, test_nan_becomes_null,
                                 test_refresh_restores_last, test_demo_isolation,
-                                test_cross_site_rejected)):
+                                test_cross_site_rejected, test_desktop_export,
+                                test_export_skips)):
             tmp = base / f"case{i}"
             tmp.mkdir()
             fn(tmp)
     test_sanitize_numpy_like()
+    test_default_export_dir()
     print(f"\n{len(PASSED)} 项通过，{len(FAILED)} 项失败")
     return 1 if FAILED else 0
 

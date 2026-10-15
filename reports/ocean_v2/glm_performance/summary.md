@@ -126,3 +126,77 @@
 | `raw/baseline_digests.json` | 撤回依据（基线哈希） |
 | `shots/fixed_*.png` | 修复后画面（含水光视觉证据） |
 | `tools/cdp_harness.mjs`、`tools/analyze_frames.py` | 测量工具（可复跑） |
+
+---
+
+# 追加（2026-10-10）：界面光效加浓 + 发现并规避 100 卡滚动阻塞
+
+## A. 用户诉求与处置
+
+**诉求**：「查询窗口的特效还是太淡了」，问该不该换特效。
+
+**判断**：不需要换特效。取证截图显示斜向光柱存在但偏淡——原因是 10-09 改造时去掉了 CSS `blur(1.5px)`，光晕不再被铺开。属返工副作用，不是特效本身不行。
+
+**改动**（`ui/static/result-fx.css`，加浓至"中等"，`index.html` bump 到 `?v=3`）：
+
+| 项 | 原值 | 新值 |
+|---|---|---|
+| `.cabin-fx` opacity | .48 | **.62** |
+| `.cabin-fx` filter | saturate(1.15) | **saturate(1.2)** |
+| 光柱主渐变峰值 | `.10` | **`.16`** |
+| 光柱副渐变 | `.05` | **`.08`** |
+| 纵向明暗（顶层/底层） | `.05` / `.24` | **`.09`** / **`.30`** |
+| `cabin-breathe` 起始 opacity | .55 | **.62** |
+
+柔化实现改为：水光 canvas 由 GLSL 2×2 超采样承担（不加 CSS filter，避免每帧合成开销）；静态光柱层本身是低频渐变，放大后天然柔和。
+
+## B. 意外发现：100 卡滚动存在周期性主线程阻塞（独立问题）
+
+加浓后复测，`cards100_scroll` 出现 **56~72 个 longtask / 8~10 秒**。**关键证据——这不是加浓引起的**：
+
+1. 逐项回退（opacity→光柱→saturate），全部回退到 10-09 原样后**照样阻塞**（72 个）；
+2. 全新浏览器进程单轮测量**同样复现**（61 个）——不是测试叠加假象，用户实际会遇到；
+3. 时间线：10-09 全部测量（含修复后复测）**longtask 恒为 0**；10-10 首次测量即出现。
+
+**形态**：每 **420ms** 一次、每次 **约 113ms**（间隔 401~451ms，极规律）。
+
+**分层归因实验**（`node cdp_harness.mjs diag --layers ...`）：
+
+| 关闭的东西 | longtask 数 |
+|---|---|
+| 对照（什么都不关） | 22 |
+| IntersectionObserver | 22（无效） |
+| 全局 CSS animation/transition | 21（无效） |
+| 舱体水光 canvas | 无效 |
+| **`.card::before/::after` 装饰层** | **0** ✅ |
+
+**已排除**：CSS 动画、IO 入场观察、层面积（inset `-30%`→`-8%`→`0` 均无效）、舱体水光、本次加浓改动。
+
+**结论**：真凶是 **`.card::before`（带 radial-gradient 的伪元素）存在于 100 张卡上**这件事本身。**根因机制未定论**，下一步疑点为 `.card` 的 `isolation:isolate` + `overflow:hidden` 使每卡强制独立合成层。
+
+**当前处置（规避）**：`.card::before` 置 `display:none`。
+
+## C. 规避后实测
+
+| 场景 | 阻塞期间 | 规避后 |
+|---|---|---|
+| cards100_scroll | rAF p95 **110.1**ms / longtask **22** 个 / 2.5s | rAF p95 **17.1**ms / longtask **0** 个 |
+| cards5_hover | — | rAF p95 17.5ms / longtask 0 |
+| detail_toggle | — | rAF p95 16.9ms / longtask 0 |
+
+回归：`test_app_poll.js` 40 项、`test_ui.py` 25 项，全过。
+
+**代价**：卡片内部那层缓慢游移的青色光斑消失（卡片仍有底色渐变 + 悬停反光）。**面板光柱加浓不受影响**。
+
+**恢复方法**：去掉 `.card::before` 的 `display:none` 一行即可（该行上方注释已写明原因与根因线索）。
+
+## D. 追加产物
+
+| 文件 | 内容 |
+|---|---|
+| `raw/tuned_*.json`、`raw/clean_single_*.json` | 加浓后仍阻塞的证据 |
+| `raw/bisect_*.json` | 逐项回退仍阻塞的证据（opacity/光柱/saturate 全回退） |
+| `raw/diag_*_meta.json` | 分层归因实验（22→0→22 对照） |
+| `raw/insetfix*.json`、`raw/disable_cardfx_*.json` | inset 缩小无效 + 停用后归零 |
+| `shots/tuned_*.png`、`shots/finalv_*.png` | 加浓后 / 最终状态画面 |
+

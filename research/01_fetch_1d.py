@@ -143,49 +143,110 @@ def _parse_zip(content: bytes):
     return df
 
 
+def parquet_months(dst: Path) -> set[str]:
+    """本地 parquet 实际覆盖的月份集合（判「完整」的真依据，不靠文件是否存在）。"""
+    if not dst.exists():
+        return set()
+    try:
+        d = pd.read_parquet(dst, columns=["open_time"])
+    except Exception:  # noqa: BLE001
+        return set()
+    if not len(d):
+        return set()
+    ts = pd.to_datetime(d["open_time"], unit="ms", utc=True)
+    return set(ts.dt.strftime("%Y-%m").unique())
+
+
+def missing_months(sym: str, months: list[str], dst: Path) -> list[str]:
+    """按 `data/plan_1d.json` 的月份列表逐月校验，返回真正缺的月份。"""
+    have = parquet_months(dst)
+    return [m for m in months if m not in have]
+
+
 def cmd_fetch(args):
-    plan = json.loads(PLAN.read_text(encoding="utf-8"))
-    todo = list(plan)[: args.limit] if args.limit else list(plan)
-    RAW.mkdir(parents=True, exist_ok=True)
+    plan_path = Path(args.plan) if getattr(args, "plan", None) else PLAN
+    plan = json.loads(plan_path.read_text(encoding="utf-8"))
+    raw = Path(args.raw_dir) if getattr(args, "raw_dir", None) else RAW
+    journal = Path(args.journal) if getattr(args, "journal", None) else (DATA / "state_1d.jsonl")
+    dry = bool(getattr(args, "dry_run", False))
+    raw.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
-    done = skip = 0
+
+    # ① 先按月校验完整性 → 挑出真正未完成的币（修复「先截 limit 再跳过」的空转）
+    work = []
+    complete = 0
+    for sym in plan:
+        dst = raw / f"{sym}.parquet"
+        miss = missing_months(sym, plan[sym], dst)
+        if not miss and dst.exists() and not args.force:
+            complete += 1
+            continue
+        work.append((sym, miss if not args.force else list(plan[sym])))
+    if args.limit:
+        work = work[: args.limit]
+
+    print(f"[fetch] 计划 {len(plan)} 币 | 已完整 {complete} | 本次待办 {len(work)}"
+          f" | 缺月合计 {sum(len(m) for _, m in work):,}")
+    if dry:
+        for sym, miss in work[:50]:
+            print(f"   would fetch {sym:<16} 缺 {len(miss)} 月: {','.join(miss[:6])}"
+                  f"{'...' if len(miss) > 6 else ''}")
+        return 0
+
+    done = 0
     nfiles = 0
+    failed_months = 0
 
     def one_month(sym, m):
         out = f"{CDN}/{KLINE}/{sym}/1d/{sym}-1d-{m}.zip"
         try:
             r = SESSION.get(out, timeout=90)
             if r.status_code != 200 or len(r.content) < 200:
-                return None
-            return _parse_zip(r.content)
+                return m, None
+            return m, _parse_zip(r.content)
         except Exception:  # noqa: BLE001
-            return None
+            return m, None
 
-    for i, sym in enumerate(todo, 1):
-        dst = RAW / f"{sym}.parquet"
-        if dst.exists() and not args.force:
-            skip += 1
-            continue
-        months = plan[sym]
+    for i, (sym, months) in enumerate(work, 1):
+        dst = raw / f"{sym}.parquet"
         frames = []
+        if dst.exists():
+            try:                                  # 保留已有行，只补缺月（不覆盖原数据）
+                frames.append(pd.read_parquet(dst))
+            except Exception:  # noqa: BLE001
+                pass
+        got_months = []
         with ThreadPoolExecutor(max_workers=16) as ex:
-            for df in ex.map(lambda m: one_month(sym, m), months):
+            for m, df in ex.map(lambda mm: one_month(sym, mm), months):
                 if df is not None and len(df):
                     frames.append(df)
+                    got_months.append(m)
+        with journal.open("a", encoding="utf-8") as fh:
+            for m in months:
+                fh.write(json.dumps({"symbol": sym, "month": m,
+                                     "status": "ok" if m in got_months else "fail",
+                                     "ts": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())},
+                                    ensure_ascii=False) + "\n")
+        failed_months += len(months) - len(got_months)
         if not frames:
             continue
         out = pd.concat(frames, ignore_index=True)
         out = out.drop_duplicates(subset="open_time").sort_values("open_time").reset_index(drop=True)
+        if "symbol" in out.columns:
+            out = out.drop(columns=["symbol"])
         out.insert(0, "symbol", sym)
         out["dt"] = pd.to_datetime(out["open_time"], unit="ms", utc=True)
-        out.to_parquet(dst, index=False, compression="zstd")
+        tmp = dst.with_suffix(".parquet.tmp")     # 原子替换，避免写坏原文件
+        out.to_parquet(tmp, index=False, compression="zstd")
+        tmp.replace(dst)
         done += 1
-        nfiles += len(frames)
+        nfiles += len(got_months)
         if i % 25 == 0 or i <= 5:
             el = time.time() - t0
-            print(f"  [{i}/{len(todo)}] {sym:<14} {len(out):>5} 根 | 已下 {done} 币 | {el:.0f}s")
-    print(f"[fetch] 新下 {done} / 跳过 {skip} | 文件 {nfiles:,} | 用时 {time.time()-t0:.0f}s"
-          f" -> {RAW}")
+            print(f"  [{i}/{len(work)}] {sym:<16} +{len(got_months)} 月 | 累计 {len(out):>5} 根"
+                  f" | {el:.0f}s")
+    print(f"[fetch] 补齐 {done} 币 / 补下 {nfiles:,} 月 / 失败月 {failed_months} "
+          f"| 已完整 {complete} | 用时 {time.time()-t0:.0f}s -> {raw}")
     return 0
 
 
@@ -197,6 +258,11 @@ def main():
     p.set_defaults(func=cmd_fetch)
     p.add_argument("--limit", type=int, default=0)
     p.add_argument("--force", action="store_true")
+    p.add_argument("--dry-run", action="store_true",
+                   help="只列出本轮会补哪些币、缺哪些月，不发任何请求")
+    p.add_argument("--raw-dir", default=None, help="覆盖本地日线目录（隔离测试用）")
+    p.add_argument("--journal", default=None, help="覆盖逐月台账路径（隔离测试用）")
+    p.add_argument("--plan", default=None, help="覆盖计划文件路径（隔离测试用）")
     args = ap.parse_args()
     return args.func(args)
 

@@ -9,6 +9,7 @@
 """
 from __future__ import annotations
 
+import csv
 import importlib.util
 import json
 import logging
@@ -29,8 +30,54 @@ RESULT_DIR = PROJECT_ROOT / "results" / "ui"
 LAST_RESULT_PATH = RESULT_DIR / "last_result.json"
 DEMO_FIXTURE_PATH = UI_DIR / "fixtures" / "demo_rows.json"
 PORT = int(os.getenv("CHUANMU_UI_PORT", "8765"))
+DESKTOP_EXPORT_DIR_NAME = "查询结果"   # 每轮结果另存到桌面这个文件夹（改这里即可改名）
 
 sys.path.insert(0, str(PROJECT_ROOT))  # 让 binance_box_strategy 可导入
+
+def _desktop_result_dir() -> Path | None:
+    """桌面「查询结果」文件夹；找不到桌面时回退到用户主目录。取不到返回 None。"""
+    try:
+        home = Path.home()
+        desktop = home / "Desktop"
+        return (desktop if desktop.is_dir() else home) / DESKTOP_EXPORT_DIR_NAME
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _csv_cell(value):
+    """CSV 单元格：None → 空；列表/字典 → JSON 文本；其余原样。"""
+    if value is None:
+        return ""
+    if isinstance(value, (list, tuple, dict)):
+        return json.dumps(value, ensure_ascii=False)
+    return value
+
+
+def export_rows_csv(rows: list[dict], out_dir: Path, stamp: str | None = None) -> Path | None:
+    """把本轮入选标的写成 CSV（utf-8-sig，Excel 双击可读，中文不乱码）。
+
+    列取所有行字段的并集（按首次出现顺序），缺列留空；先写 .tmp 再替换，避免半截文件。
+    返回最终路径；rows 为空返回 None。异常向上抛，由调用方决定影响范围。
+    """
+    if not rows:
+        return None
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = stamp or datetime.now().strftime("%Y%m%d-%H%M%S")
+    fields: list[str] = []
+    for row in rows:
+        for key in row:
+            if key not in fields:
+                fields.append(key)
+    path = out_dir / f"入选标的-{stamp}.csv"
+    tmp = path.with_name(path.name + ".tmp")
+    with tmp.open("w", encoding="utf-8-sig", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fields, extrasaction="ignore")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow({k: _csv_cell(row.get(k)) for k in fields})
+    tmp.replace(path)
+    return path
+
 
 _base = None  # binance_box_strategy 模块（惰性加载）
 _scan_mod = None
@@ -122,18 +169,20 @@ class ScanManager:
 
     - 只允许一个扫描任务（锁互斥，多点/刷新不会产生重复请求）
     - 成功（含零结果）才写入 last_result；失败绝不覆盖上次成功
-    - 演示模式不写盘、不读盘，与真实结果完全隔离
+    - 真实模式成功后，另存一份 CSV 到桌面「查询结果」文件夹（失败不影响展示）
+    - 演示模式不写盘、不读盘、不导出，与真实结果完全隔离
     """
 
     def __init__(self, scan_fn, result_path: Path | None, demo: bool = False,
                  demo_rows: list | None = None, demo_delay: float = 2.2,
-                 sleep=time.sleep):
+                 sleep=time.sleep, export_dir: Path | None = None):
         self._scan_fn = scan_fn
         self._result_path = result_path
         self._demo = demo
         self._demo_rows = demo_rows or []
         self._demo_delay = demo_delay
         self._sleep = sleep
+        self._export_dir = export_dir   # None=默认桌面「查询结果」；演示模式不导出
         self._demo_step = 0
         self._lock = threading.Lock()
         self.status = "idle"
@@ -165,6 +214,24 @@ class ScanManager:
             tmp.replace(self._result_path)
         except Exception:  # noqa: BLE001
             logging.warning("结果保存失败（不影响本次展示）", exc_info=True)
+
+    def _export_desktop(self, rows: list) -> None:
+        """本轮结果另存一份到桌面「查询结果」文件夹。
+
+        演示模式跳过（不往用户桌面写假数据）；rows 为空（零结果）跳过；
+        任何失败只记日志，绝不影响本轮展示与已保存的 last_result。
+        """
+        if self._demo or not rows:
+            return
+        out_dir = self._export_dir if self._export_dir is not None else _desktop_result_dir()
+        if out_dir is None:
+            return
+        try:
+            path = export_rows_csv(rows, out_dir)
+            if path is not None:
+                logging.info("本轮结果已另存到：%s", path)
+        except Exception:  # noqa: BLE001
+            logging.warning("另存到桌面「查询结果」失败（不影响本轮展示）", exc_info=True)
 
     def start(self) -> bool:
         with self._lock:
@@ -209,6 +276,7 @@ class ScanManager:
                 "round": round_info,
             }
             self._save_last(payload)
+            self._export_desktop(rows)
             with self._lock:
                 self.status = payload["status"]
                 self.rows = rows

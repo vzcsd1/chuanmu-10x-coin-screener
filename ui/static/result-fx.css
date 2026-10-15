@@ -37,13 +37,12 @@
   height: 100%;
   display: block;
   mix-blend-mode: screen;
-  opacity: .48;
+  opacity: .62;
   /* 柔化分两种做法：
    *   ① 水光 canvas（每帧变）——由 result-fx.js 的 GLSL 2×2 超采样内建承担，
    *      不用 CSS filter，避免每帧多一层合成过滤（性能开销来源之一）。
-   *   ② 下面静态的光柱/明暗层——本身是低频渐变，用低分辨率位图放大即可获得
-   *      同类柔化效果，零每帧开销（不随动画重算，仅在尺寸变化时重算一次）。 */
-  filter: saturate(1.25);
+   *   ② 下面静态的光柱/明暗层——本身是低频渐变，放大后天然柔和，零每帧开销。 */
+  filter: saturate(1.2);
 }
 
 /* 斜向透光：自右上（首页月亮方位）洒入舱内，缓慢呼吸聚散，不是平移云图 */
@@ -52,9 +51,9 @@
   position: absolute;
   inset: -10%;
   background:
-    linear-gradient(118deg, transparent 26%, rgba(140, 210, 225, .07) 42%,
-      rgba(175, 228, 238, .10) 50%, rgba(140, 210, 225, .07) 58%, transparent 74%),
-    linear-gradient(118deg, transparent 52%, rgba(120, 200, 215, .05) 66%, transparent 84%);
+    linear-gradient(118deg, transparent 25%, rgba(140, 210, 225, .11) 42%,
+      rgba(182, 232, 240, .16) 50%, rgba(140, 210, 225, .11) 58%, transparent 75%),
+    linear-gradient(118deg, transparent 51%, rgba(120, 200, 215, .08) 66%, transparent 85%);
   animation: cabin-breathe 9s ease-in-out infinite alternate;
 }
 
@@ -115,8 +114,25 @@
 
 .card > * { position: relative; z-index: 1; }
 
-/* 卡内水光：三层光斑，位移 + 缩放 + 呼吸叠加，缓慢聚散游移（非匀速平移） */
+/* 卡内水光：三层光斑，位移 + 缩放 + 呼吸叠加，缓慢聚散游移（非匀速平移）
+ *
+ * 2026-10-10 性能修复（重要）：本层声明为 `display:none` 停用。
+ * 原因：只要本层（带 radial-gradient 的伪元素）挂在 100 张卡上，滚动时就会
+ * 周期性阻塞主线程——实测每 420ms 一次、每次约 113ms，30s 共 22~69 个 longtask
+ * （关掉本层后归零，反复正反验证）。已确认与下列均无关：
+ *   · 不是 CSS animation（禁用全部动画无效）
+ *   · 不是 IntersectionObserver 入场观察（断开无效）
+ *   · 不是层面积（inset 从 -30% 收到 -8%、再收到 0，均无效）
+ *   · 不是本次「加浓舱体光柱」改动（改动全部回退后照样阻塞）
+ *   · 不是舱体水光 canvas（关掉无效）
+ * 即：100 卡 × 带 radial-gradient 的伪元素层 = 滚动阻塞，具体机制待进一步定位
+ * （下一步怀疑方向：与 .card 的 isolation:isolate + overflow:hidden 组合
+ *  导致每卡强制独立合成层，滚动时合成器落后于主线程）。
+ *
+ * 停用影响：卡片内部那层缓慢游移的青色光斑消失（卡片仍有底色渐变与悬停反光）。
+ * 若定位到根因并修复，把下面的 display:none 去掉即可恢复原效果。 */
 .card::before {
+  display: none;   /* 性能停用，勿删本节说明；根因定位后可移除本行 */
   content: "";
   position: absolute;
   inset: -30%;
