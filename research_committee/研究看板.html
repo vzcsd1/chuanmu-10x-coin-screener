@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>多倍币捕捉能力突破研究 · 决策看板</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2129; --line:#30363d;
+    --txt:#e6edf3; --mut:#8b949e; --dim:#6e7681;
+    --gold:#d29922; --red:#f85149; --green:#3fb950; --blue:#58a6ff; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei",sans-serif;
+    line-height:1.7; padding:48px 32px 80px;
+  }
+  .wrap{max-width:1180px;margin:0 auto}
+  header{border-bottom:1px solid var(--line);padding-bottom:28px;margin-bottom:40px}
+  .kicker{color:var(--gold);font-size:12px;letter-spacing:.18em;text-transform:uppercase;margin-bottom:14px}
+  .mtag{display:inline-block;background:rgba(188,140,255,.15);color:#d2a8ff;border:1px solid rgba(188,140,255,.35);
+    border-radius:4px;padding:1px 8px;letter-spacing:.06em;font-size:11px;margin-left:6px;text-transform:none}
+  h1{font-size:32px;font-weight:650;letter-spacing:-.01em;line-height:1.35}
+  .sub{color:var(--mut);font-size:14px;margin-top:12px}
+  .thesis{
+    margin-top:24px;padding:18px 22px;background:linear-gradient(90deg,rgba(210,153,34,.10),transparent);
+    border-left:3px solid var(--gold);font-size:15px;color:#f0d9a8;
+  }
+  h2{font-size:13px;letter-spacing:.14em;color:var(--dim);text-transform:uppercase;margin:48px 0 20px;font-weight:600}
+  .grid{display:grid;gap:14px}
+  .g4{grid-template-columns:repeat(4,1fr)}
+  .g3{grid-template-columns:repeat(3,1fr)}
+  .g2{grid-template-columns:repeat(2,1fr)}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px 20px}
+  .num{font-size:26px;font-weight:650;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+  .lbl{font-size:12px;color:var(--mut);margin-top:6px;line-height:1.5}
+  .src{font-size:11px;color:var(--dim);margin-top:8px}
+  .red{color:var(--red)} .green{color:var(--green)} .blue{color:var(--blue)}
+  .gold{color:var(--gold)} .purple{color:var(--purple)}
+  .tree{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:26px}
+  .root{text-align:center;padding:12px;border:1px dashed var(--gold);border-radius:8px;color:#f0d9a8;font-size:14px}
+  .branch-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:20px}
+  .branch{border-radius:8px;padding:14px;font-size:13px;border:1px solid var(--line);background:var(--panel2)}
+  .branch b{display:block;font-size:14px;margin-bottom:6px}
+  .branch span{color:var(--mut);font-size:12px;display:block;line-height:1.55}
+  .tag{display:inline-block;font-size:10px;padding:2px 7px;border-radius:20px;margin-top:8px;letter-spacing:.05em}
+  .t-hot{background:rgba(248,81,73,.15);color:#ff9b95;border:1px solid rgba(248,81,73,.3)}
+  .t-mid{background:rgba(210,153,34,.15);color:#e3b341;border:1px solid rgba(210,153,34,.3)}
+  .t-ok{background:rgba(63,185,80,.13);color:#56d364;border:1px solid rgba(63,185,80,.28)}
+  .hyps{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .hyp{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:11px 12px;font-size:12px;position:relative;transition:.15s}
+  .hyp:hover{border-color:#484f58;background:var(--panel2)}
+  .hyp .id{font-size:10px;color:var(--dim);letter-spacing:.06em}
+  .hyp .nm{font-weight:600;margin-top:3px;font-size:12.5px;line-height:1.4}
+  .hyp .st{position:absolute;top:11px;right:11px;font-size:10px}
+  .gA{border-left:2px solid var(--blue)}
+  .gB{border-left:2px solid var(--purple)}
+  .gC{border-left:2px solid var(--gold)}
+  .gD{border-left:2px solid var(--green)}
+  .gE{border-left:2px solid #ff9b95}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;color:var(--dim);font-weight:500;font-size:11px;letter-spacing:.08em;padding:10px 12px;border-bottom:1px solid var(--line)}
+  td{padding:12px;border-bottom:1px solid rgba(48,54,61,.6);vertical-align:top}
+  tr:last-child td{border-bottom:none}
+  .pill{font-size:10px;padding:2px 8px;border-radius:4px;background:rgba(88,166,255,.12);color:#79c0ff;border:1px solid rgba(88,166,255,.25);white-space:nowrap}
+  .ans{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px 24px;margin-bottom:14px}
+  .ans .q{font-size:12px;color:var(--gold);letter-spacing:.05em;margin-bottom:10px}
+  .ans .a{font-size:15px;font-weight:600;line-height:1.6;margin-bottom:12px}
+  .ans p{font-size:13.5px;color:var(--mut);line-height:1.75}
+  .ans p+p{margin-top:8px}
+  ul{margin:8px 0 0 18px} li{font-size:13.5px;color:var(--mut);margin-bottom:6px;line-height:1.7}
+  li b{color:var(--txt);font-weight:600}
+  footer{margin-top:56px;padding-top:22px;border-top:1px solid var(--line);color:var(--dim);font-size:12px;line-height:1.9}
+  .legend{display:flex;gap:18px;font-size:11px;color:var(--dim);margin-bottom:14px;flex-wrap:wrap}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:middle}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <div class="kicker">Research Committee · 2026-10-19 · ds4.1f<span class="mtag">模型标签 ds4.1f</span></div>
+  <h1>多倍币捕捉能力突破研究</h1>
+  <div class="sub">
+    项目 <code>vzcsd1/chuanmu-10x-coin-screener</code> ｜ 30 个研究假设 · 10 条颠覆性方向 · 10 个跨域组合 · 5 个零成本实验<br>
+    第一阶段只做诊断与验证路线，<b style="color:var(--txt)">未改动任何生产评分、参数或数据</b>
+  </div>
+  <div class="thesis">
+    这个项目已经把「测量」修得相当干净，但它一直在用<b>错误的基准率</b>优化<b>最不稀缺的一环</b>（看出一个币在涨），
+    而把两件真正决定上限的事留成空白：<b>一个币在物理上能不能翻倍</b>，和<b>涨起来之后怎么留住</b>。
+  </div>
+</header>
+
+<h2>关键数字（均为本地复算或原文照录）</h2>
+<div class="grid g4">
+  <div class="card">
+    <div class="num">58.6% <span style="font-size:14px;color:var(--dim)">vs</span> <span class="red">5.15%</span></div>
+    <div class="lbl">样本基准率 vs 底账真实 30 天 ≥2 倍率</div>
+    <div class="src">822/1402 ｜ A1 r3 complete_30d 口径</div>
+  </div>
+  <div class="card">
+    <div class="num gold">72.3% <span style="font-size:14px;color:var(--dim)">→</span> <span class="red">≈6.4%</span></div>
+    <div class="lbl">账面精确率 vs 迁移到真实基准后的估计</div>
+    <div class="src">lift 1.234 ｜ 量级提示，非精确预测</div>
+  </div>
+  <div class="card">
+    <div class="num red">4.25 <span style="font-size:14px;color:var(--dim)">vs</span> 5.17</div>
+    <div class="lbl">十倍组 K 线均分 vs 2–3 倍组</div>
+    <div class="src">n=24 vs n=375 ｜ 评分越高，越不像十倍</div>
+  </div>
+  <div class="card">
+    <div class="num red">10 / 24</div>
+    <div class="lbl">十倍事件中总分「恰好等于 5」的条数</div>
+    <div class="src">刚好卡线，不是高分选中</div>
+  </div>
+  <div class="card">
+    <div class="num">65.8%</div>
+    <div class="lbl">正例缺完整合约三字段（541/822）</div>
+    <div class="src">评分对三分之二样本算不出来</div>
+  </div>
+  <div class="card">
+    <div class="num green">+5.8pp</div>
+    <div class="lbl">主动买入占比（taker）中位切分区分度</div>
+    <div class="src">数据已在本地，从未进入评分</div>
+  </div>
+  <div class="card">
+    <div class="num blue">0.641</div>
+    <div class="lbl">逻辑回归样本外 AUC（样本内 0.744）</div>
+    <div class="src">弱信号：可排序，不可做开关</div>
+  </div>
+  <div class="card">
+    <div class="num purple">0</div>
+    <div class="lbl">已检验过的退出规则数量</div>
+    <div class="src">持有/退出层完全空白</div>
+  </div>
+</div>
+
+<h2>瓶颈树：钱花在哪，缺口在哪</h2>
+<div class="tree">
+  <div class="root">长期资产增长上限</div>
+  <div class="branch-row">
+    <div class="branch">
+      <b class="blue">抓到（发现）</b>
+      <span>已被认真优化，但基准率是错的</span>
+      <span class="tag t-mid">资格层未建模</span>
+    </div>
+    <div class="branch">
+      <b class="gold">抓对（排序）</b>
+      <span>从未在真实分母下测过排序质量</span>
+      <span class="tag t-hot">预算曲线缺失</span>
+    </div>
+    <div class="branch">
+      <b class="red">拿住（持有）</b>
+      <span>没有任何持有期收益计算</span>
+      <span class="tag t-hot">完全空白</span>
+    </div>
+    <div class="branch">
+      <b class="red">不亏回去（退出）</b>
+      <span>四条候选规则，一条都没跑过</span>
+      <span class="tag t-hot">完全空白</span>
+    </div>
+  </div>
+</div>
+
+<h2>研究假设库（30 张卡，按机制分组）</h2>
+<div class="legend">
+  <span><i class="dot" style="background:var(--blue)"></i>A 经典体系</span>
+  <span><i class="dot" style="background:var(--purple)"></i>B 加密实战</span>
+  <span><i class="dot" style="background:var(--gold)"></i>C 跨市场</span>
+  <span><i class="dot" style="background:var(--green)"></i>D 微观结构</span>
+  <span><i class="dot" style="background:#ff9b95"></i>E 量化 / F 田野 / G 跨学科</span>
+  <span style="margin-left:auto">★★★ 可能改变天花板 ｜ ★★ 明显改进 ｜ ★ 便宜但增量小</span>
+</div>
+<div class="hyps">
+  <div class="hyp gA"><span class="st">★★</span><div class="id">H01</div><div class="nm">关键点三段式</div></div>
+  <div class="hyp gA"><span class="st">★★</span><div class="id">H02</div><div class="nm">风险单位与加仓</div></div>
+  <div class="hyp gA"><span class="st gold">★★★</span><div class="id">H03</div><div class="nm">趋势模板当准入</div></div>
+  <div class="hyp gA"><span class="st">★★</span><div class="id">H04</div><div class="nm">波动收缩序列</div></div>
+  <div class="hyp gA"><span class="st gold">★★★</span><div class="id">H05</div><div class="nm">波动率退出</div></div>
+
+  <div class="hyp gB"><span class="st gold">★★★</span><div class="id">H06</div><div class="nm">跨所合约资格</div></div>
+  <div class="hyp gB"><span class="st gold">★★★</span><div class="id">H07</div><div class="nm">期现价差（基差）</div></div>
+  <div class="hyp gB"><span class="st">★★</span><div class="id">H08</div><div class="nm">鱼尾派发信号</div></div>
+  <div class="hyp gB"><span class="st gold">★★★</span><div class="id">H09</div><div class="nm">新永续上线</div></div>
+  <div class="hyp gB"><span class="st">★★</span><div class="id">H10</div><div class="nm">二次启动</div></div>
+
+  <div class="hyp gC"><span class="st gold">★★★</span><div class="id">H11</div><div class="nm">低流通 / 高 FDV</div></div>
+  <div class="hyp gC"><span class="st">★★</span><div class="id">H12</div><div class="nm">解锁日历</div></div>
+  <div class="hyp gC"><span class="st gold">★★★</span><div class="id">H13</div><div class="nm">负费率 × 高 OI/市值</div></div>
+  <div class="hyp gC"><span class="st">★★</span><div class="id">H14</div><div class="nm">宏观开关</div></div>
+  <div class="hyp gC"><span class="st">★</span><div class="id">H15</div><div class="nm">事件吸收率</div></div>
+
+  <div class="hyp gD"><span class="st gold">★★★</span><div class="id">H16</div><div class="nm">OI 数量与价值分离</div></div>
+  <div class="hyp gD"><span class="st gold">★★★</span><div class="id">H17</div><div class="nm">主动买卖比</div></div>
+  <div class="hyp gD"><span class="st">★★</span><div class="id">H18</div><div class="nm">平均单笔规模</div></div>
+  <div class="hyp gD"><span class="st">★★</span><div class="id">H19</div><div class="nm">薄盘度</div></div>
+  <div class="hyp gD"><span class="st">★★</span><div class="id">H20</div><div class="nm">清算瀑布</div></div>
+
+  <div class="hyp gE"><span class="st gold">★★★</span><div class="id">H21</div><div class="nm">排序学习替代打分</div></div>
+  <div class="hyp gE"><span class="st gold">★★★</span><div class="id">H22</div><div class="nm">条件性有效（交互）</div></div>
+  <div class="hyp gE"><span class="st">★★</span><div class="id">H23</div><div class="nm">变化点检测</div></div>
+  <div class="hyp gE"><span class="st">★★</span><div class="id">H24</div><div class="nm">相似行情检索</div></div>
+  <div class="hyp gE"><span class="st">★★</span><div class="id">H25</div><div class="nm">多专家竞争</div></div>
+
+  <div class="hyp gE"><span class="st gold">★★★</span><div class="id">H26</div><div class="nm">假阳性解剖</div></div>
+  <div class="hyp gE"><span class="st">★★</span><div class="id">H27</div><div class="nm">链上净流入</div></div>
+  <div class="hyp gE"><span class="st">★</span><div class="id">H28</div><div class="nm">叙事生命周期</div></div>
+  <div class="hyp gE"><span class="st">★</span><div class="id">H29</div><div class="nm">做市商指纹</div></div>
+  <div class="hyp gE"><span class="st gold">★★★</span><div class="id">H30</div><div class="nm">注意力预算曲线</div></div>
+</div>
+
+<h2>五个实验 · 全部零新数据，约 6.5 个工作日</h2>
+<div class="card" style="padding:8px 20px">
+<table>
+  <thead><tr><th style="width:52px">序</th><th>实验</th><th>要回答什么</th><th style="width:120px">成功判据</th><th style="width:70px">工期</th></tr></thead>
+  <tbody>
+    <tr><td><span class="pill">E1</span></td><td><b>订单流三特征</b><br><span style="color:var(--dim);font-size:12px">taker 比 / 单笔规模 / 薄盘度</span></td><td>是否提供超越「趋势」的独立信息</td><td>分位单调 + 分层后仍 ≥5pp</td><td>0.5 天</td></tr>
+    <tr><td><span class="pill">E3</span></td><td><b>预算-覆盖曲线</b><br><span style="color:var(--dim);font-size:12px">每天看 5/10/20/50/100 个</span></td><td>现评分比随机好多少，拐点在哪</td><td>N=20 处显著高于随机</td><td>1 天</td></tr>
+    <tr><td><span class="pill">E2</span></td><td><b>条件交互复活</b><br><span style="color:var(--dim);font-size:12px">7 个已作废条件 × 2×2 分层</span></td><td>被否决的条件是否只在某些条件下有效</td><td>任一格 ≥+8pp 且样本 ≥150</td><td>1 天</td></tr>
+    <tr><td><span class="pill">E4</span></td><td><b>退出规则对照</b><br><span style="color:var(--dim);font-size:12px">固定止盈 / 2N / 均线 / 鱼尾</span></td><td>同等回撤下谁保留右尾更多</td><td>右尾保留率高出 ≥10pp</td><td>2 天</td></tr>
+    <tr><td><span class="pill">E5</span></td><td><b>假阳性匹配解剖</b><br><span style="color:var(--dim);font-size:12px">特征相同、结局不同的两组</span></td><td>为什么看着一样却不涨</td><td>找到 ≥1 个显著差异变量</td><td>2 天</td></tr>
+  </tbody>
+</table>
+</div>
+
+<h2>三个问题的回答</h2>
+
+<div class="ans">
+  <div class="q">Q1 · 只能改变一项核心能力，最值得调查什么</div>
+  <div class="a">建立「结构资格层」：先判一个币在物理上能不能翻数倍，再谈它现在强不强。</div>
+  <p>四条本地证据交汇：十倍组 K 线分 <b class="red">4.25</b> 低于 2–3 倍组的 5.17；十倍组突破命中 <b class="red">0%</b>；24 个十倍里 <b class="red">10 个恰好 5 分</b>；<b class="red">65.8%</b> 正例缺合约字段。</p>
+  <p>结论：这些赢家是被「进入池子」捞到的，不是被「分数高」选出来的。而资格信息（OI/市值、OKX 双所、taker、trades）<b style="color:var(--txt)">一半已算出来丢在内存里，一半已躺在磁盘上没人打开</b>。</p>
+</div>
+
+<div class="ans">
+  <div class="q">Q2 · 哪些被忽略的方向最可能改变上限</div>
+  <div class="a">序列与路径特征 · 供给结构 · 退出与持有层。</div>
+  <p><b style="color:var(--txt)">序列</b>：所有特征都是单时点截面，而「启动前」本质是过程（压缩→突破→回踩、OI 先降后升、基差先扩后收）。</p>
+  <p><b style="color:var(--txt)">供给</b>：唯一一类物理约束而非统计信号。经典体系在这里全部失效（它们假设供给固定），是项目真正的比较优势。</p>
+  <p><b style="color:var(--txt)">退出</b>：收益集中度极高，退出规则多保留 10pp 右尾，对复利的影响可能大于把命中率从 6% 提到 7%。</p>
+</div>
+
+<div class="ans">
+  <div class="q">Q3 · 尚未意识到、但可能改变方向的问题</div>
+  <div class="a">五个，按「一旦确认会推翻多少现有工作」排序。</div>
+  <ul>
+    <li><b>市值闸门在回测中从未生效</b>：`gate_cap` 恒为 True，而这条闸门正在实盘里砍标的。</li>
+    <li><b>发现与持有共用同一个分数</b>，而二者的最优解相反（前者奖励变化率，后者奖励结构稳定）。</li>
+    <li><b>事件标签在制造研究目标</b>：`pre_day` 要求「启动前一天有信号」，系统性排除慢涨型行情。</li>
+    <li><b>研究库与实盘池的样本空间不同</b>：库里含已下架币（ALPACA 45.68x），实盘结构上不可见。</li>
+    <li><b>收益集中度含伪影</b>：前十占比 51.4%，其中 IOTX 记 16,360 倍（低点 0.000001），均值型指标不可信。</li>
+  </ul>
+</div>
+
+<footer>
+  完整报告：<b style="color:var(--txt)">多倍币捕捉能力突破研究_研究委员会交付_20261019.md</b>（约 4.4 万字，含 30 张研究卡、反方审查、复跑命令）<br>
+  所有数字均可在本地复算；社区材料只用于生成假设，不进入结论；未改动任何生产代码或参数。<br>
+  <b style="color:#d2a8ff">本看板由 ds4.1f 生成</b>　｜　同目录 `20261019_verified/` 为其他代理的并行产出，两者互不代表。
+</footer>
+
+</div>
+</body>
+</html>

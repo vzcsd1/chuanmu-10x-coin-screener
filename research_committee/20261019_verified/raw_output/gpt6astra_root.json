@@ -1,0 +1,313 @@
+{
+  "model_tag": "gpt6astra",
+  "phase": "round_1_independent",
+  "sources": [
+    {
+      "id": "GH02",
+      "url": "https://arxiv.org/abs/1003.0146",
+      "title": "A Contextual-Bandit Approach to Personalized News Article Recommendation",
+      "author": "Lihong Li, Wei Chu, John Langford, Robert E. Schapire",
+      "published": "2010-02-28; revised 2012-03-01",
+      "accessed": "2026-10-19",
+      "status": "primary_abstract_read",
+      "quote": "any bandit algorithm can be reliably evaluated offline using previously recorded random traffic",
+      "supports": "注意力分配可以是依次选择行动并学习；论文离线验证依赖随机流量记录。",
+      "limits": "研究对象是新闻点击，不证明币价可预测；旧筛选记录没有随机选择概率，不能直接套其离线政策评估。"
+    },
+    {
+      "id": "GH03",
+      "url": "https://arxiv.org/abs/1506.02629",
+      "title": "Generalization in Adaptive Data Analysis and Holdout Reuse",
+      "author": "Cynthia Dwork, Vitaly Feldman, Moritz Hardt, Toniann Pitassi, Omer Reingold, Aaron Roth",
+      "published": "2015-06-08; revised 2015-09-25",
+      "accessed": "2026-10-19",
+      "status": "primary_abstract_read",
+      "quote": "Reusing a holdout set adaptively multiple times can easily lead to overfitting to the holdout set itself.",
+      "supports": "看完结果再提假设会让反复使用的测试集失去独立性；需记录搜索过程。",
+      "limits": "本轮未实现论文的受保护复用算法，其数学保证不自动适用于相关的金融时间序列。"
+    },
+    {
+      "id": "GH04",
+      "url": "https://www.microsoft.com/en-us/research/publication/the-sybil-attack/",
+      "title": "The Sybil Attack",
+      "author": "John (JD) Douceur",
+      "published": "2002-01",
+      "accessed": "2026-10-19",
+      "status": "primary_abstract_read",
+      "quote": "if a single faulty entity can present multiple identities, it can control a substantial fraction of the system",
+      "supports": "多个身份不代表多个独立来源，可启发去除复制账号与同源传播。",
+      "limits": "论文研究计算机系统，不证明任一币存在控盘、机器人或同一钱包所有人；归属仍须证据。"
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H31",
+      "title": "先分配研究行动，再排币名",
+      "group": "G",
+      "kind": "standard",
+      "mechanism": "同一币在不同阶段，最有价值的行动可能是立即看图、核实公告或暂缓；按行动可能改变决策的程度和耗时分配注意力，可能比按涨幅潜力排序少漏机会。",
+      "challenge": "挑战一个分数同时决定入池、人工阅读与后续跟踪。",
+      "project_relation": "扩展A1关注成本及B10留痕；增量是记录一次人工行动解决了哪个未知项，而非只统计名单长度。",
+      "upside": "若研究时间而非初筛信息是瓶颈，上限可能提高；尚无本项目实测。",
+      "data": "全体候选与未选对象的时序、提醒、更名、人工读取耗时、核实前后判断；后两项目前缺。",
+      "decision_time": "每次信号真正可用后，以当时剩余人工分钟数选择行动。",
+      "availability": "机器特征只取已收盘数据；人工标签必须在揭晓后来行情前封存；缺随机行动记录时不能声称离线还原了用户行为。",
+      "baseline": "现评分排序、简单趋势、同预算随机；同时对照固定频率复查。",
+      "experiment": "先在已冻结历史片段中遮住未来，比较同样总阅读分钟数下的及时赢家覆盖与重复劳动；再以正常使用时记录的耗时核对，不把模拟点击当成交。",
+      "support": "在相同人工时间下提高分档及时覆盖，且未将成本转移到隐藏复查或失败对象。",
+      "refute": "计入核实时间后优势消失，或无法使隐藏赢家及时晋级。",
+      "failure_learning": "定位究竟是人力、数据还是规则限制；保留人工时间估计误差。",
+      "evidence_ids": [
+        "GH02"
+      ],
+      "result_type": [
+        "B",
+        "C"
+      ],
+      "terms": [
+        "candidate_pool",
+        "false_negative"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "H32",
+      "title": "按独立传播链计证据",
+      "group": "G",
+      "kind": "standard",
+      "mechanism": "一条消息被大量账号复制，会让热度与共识虚高；按最早来源和传播链合并后，真正新增的独立参与群体可能更接近可持续需求变化。",
+      "challenge": "挑战帖子数、持币地址数和模型赞同票数等同独立支持。",
+      "project_relation": "扩展B3/C3；增量是来源依赖图、删除修订留痕及独立扩散顺序，不是增加一个情绪分。",
+      "upside": "可能从被操纵的注意力中找出持续扩散，但交易上限待验证。",
+      "data": "带时间戳帖子及转发关系、公开链接、原始作者；身份未知保留未知，不以文本相似断定同人。",
+      "decision_time": "每小时只按已公开且实际采得的传播关系更新。",
+      "availability": "采用本地首次取得时间，不用后来发现的第一帖倒填；删除内容造成的缺口单列。",
+      "baseline": "原始提及次数、价格/成交量基线与随机打乱传播边的对照。",
+      "experiment": "对同叙事、相近规模的赢家和失败者比较独立群体数与传播先后；先用人工核实的少量完整传播链验证可测性。",
+      "support": "扣除价格先涨导致的关注后仍有提前量，且换平台、时期仍存在。",
+      "refute": "把复制消息合并后仅追踪了既有涨幅；失去数据的平台主导结果。",
+      "failure_learning": "明确社交量是否只是一种重复计数，及哪些数据不足以推断独立需求。",
+      "evidence_ids": [
+        "GH04"
+      ],
+      "result_type": [
+        "B",
+        "C"
+      ],
+      "terms": [
+        "catalyst",
+        "holder_concentration"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "H33",
+      "title": "反事实账先定位丢失环节",
+      "group": "G",
+      "kind": "standard",
+      "mechanism": "同一赢家可能因扫描范围、延迟、闸门、排序、人工来不及或退出而丢失；沿原始时序一次只放宽一个限制，可估计每个环节的可恢复空间。",
+      "challenge": "挑战把所有漏选都归罪于低分，或一次性改全链再归功于模型。",
+      "project_relation": "复用A1六环归因；增量是将发现后人工延迟、持有和可卖性接入同一账，按可执行剩余空间而非事后峰值估计上限。",
+      "upside": "可使研发投入转向真正损失大的环节；本身不制造交易优势。",
+      "data": "原始去向、信号时点、参考价、完整正负路径、人工记录、退出与费用假设。",
+      "decision_time": "各阶段动作仅由截止当时的信息触发，未来路径只用于评估。",
+      "availability": "缺少历史资格/深度时给区间或未知，不能把不存在的资料补成完美交易。",
+      "baseline": "当前完整流程、逐个限制的移除对照；完美预知只作为明确不可实现的诊断上界。",
+      "experiment": "在同一底账中固定其余环节，输出每一环的可恢复赢家与额外失败；再比较两个环节联合修改的重叠收益，避免相加重复。",
+      "support": "某一环节在多时期持续损失更多可参与空间，且有限数据能实际改变其动作。",
+      "refute": "只有事后全知上界好看，真实可用规则恢复不了机会。",
+      "failure_learning": "知道哪些问题属于数据可观测性而非策略能力，不再凭感觉争论主瓶颈。",
+      "evidence_ids": [],
+      "result_type": [
+        "A",
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "false_negative",
+        "drawdown",
+        "event_backtest"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "H34",
+      "title": "按机会来源去重占用注意力",
+      "group": "G",
+      "kind": "standard",
+      "mechanism": "十个同时受同一事件驱动的币可能消耗十份研究时间却提供相近信息；按当时可见的驱动/相关行为分组，先看代表币，再按新分歧晋级，可能扩大机制覆盖。",
+      "challenge": "挑战按币名不同即当成独立机会与只追单一热门板块。",
+      "project_relation": "复用A1每日新增与重复提醒；增量是同一机制跨币重复及代表币错选的代价，不简单限制同板块币数。",
+      "upside": "在同样人力下保留更多独立行情；若组内存在唯一超级赢家，分组也可能伤害上限。",
+      "data": "当时板块关系、已知事件、过去收益共同变化、组内相对强弱和实际人工记录。",
+      "decision_time": "每次提醒时用过去窗口建组，下一轮允许重新分组。",
+      "availability": "不使用未来相关性、后见叙事标签；无可信板块记录则只用历史价格临时组并标代理。",
+      "baseline": "不分组原排序、同数量随机、纯相关性分组。",
+      "experiment": "比较相同人工分钟下的独立事件覆盖；把每个因代表币选择而丢掉的组内赢家列明，测试自动晋级能否补救。",
+      "support": "新增独立机制的及时覆盖抵过组内赢家损失，且换时期仍成立。",
+      "refute": "代表币持续漏掉小币大行情，或晋级产生的复查负担吃掉节省。",
+      "failure_learning": "保留币名多样性与机会来源多样性是否不同的证据。",
+      "evidence_ids": [],
+      "result_type": [
+        "B",
+        "C"
+      ],
+      "terms": [
+        "macro_regime",
+        "candidate_pool",
+        "false_negative"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "H35",
+      "title": "专门学习推翻自己的观测",
+      "group": "H",
+      "kind": "standard",
+      "mechanism": "与其每次找继续上涨的理由，先记录每个候选赖以成立的具体条件；观察到该条件消失时改变跟踪或持有判断，可能减少把失败一直解释成洗盘。",
+      "challenge": "挑战只累积正面信号、跌了再补故事的更新方式。",
+      "project_relation": "扩展STRATEGY_REVIEW持有/失效与C3；增量是每个机制事前写出不同的反证，而非统一跌幅线。",
+      "upside": "可能保住继续参与能力，同时给正常回撤留下空间；不能保证对所有机制都优于价格止损。",
+      "data": "入选时机制标签、下一小时至90天路径、持仓量变化、事件更新；机制标签不能用未来结局标。",
+      "decision_time": "每次新资料可用时判断是否触发预先登记的反证。",
+      "availability": "缺数标无法判断，不作失效；所谓洗盘只表示仍符合规则，不推断主力意图。",
+      "baseline": "同入场的固定持有、简单移动退出、固定小止盈诊断对照。",
+      "experiment": "先选两种已定义机制，冻结各自反证；在赢家/假阳性/漏报三组同时计算提前退出赢家和晚止损失败，重入成本一起算。",
+      "support": "同资金约束情景下减少失败损失且保住更大赢家贡献，收益不来自放宽未知亏损预算。",
+      "refute": "反证太慢、反复触发重入或只解释已结束行情。",
+      "failure_learning": "识别哪种失败可以及时分辨，哪种必须通过损失边界管理而不是预测。",
+      "evidence_ids": [],
+      "result_type": [
+        "D",
+        "E"
+      ],
+      "terms": [
+        "drawdown",
+        "catalyst",
+        "backtest"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "H36",
+      "title": "选择最能区分争议的下一项实验",
+      "group": "G",
+      "kind": "standard",
+      "mechanism": "研究资源有限时，先挑两个主流解释给出相反预测的样本或实验，可能比遍历参数更快知道该放弃哪条解释。",
+      "challenge": "挑战按易写代码、最高旧回测分或最多人赞同来排实验。",
+      "project_relation": "复用实验卡与失败记录；增量是每次实验明确消除哪个分歧及后续决策，而非新建自动研究平台。",
+      "upside": "可提高发现新优势的速度，不能替代市场优势本身。",
+      "data": "假设表、相互冲突的可观察预测、全部试验记录、隔离的新时期。",
+      "decision_time": "选择下一实验前记录双方预测，结果揭晓后只修改探索方案。",
+      "availability": "已看过结果的片段不再充当独立确认；事后改卡保留旧版与日期。",
+      "baseline": "固定顺序试验、随机选同成本实验；比较同预算排除的错误解释数和后续决策变化。",
+      "experiment": "用本轮两组争议各做一个小实验；统计是否改变研究队列，以及下一段数据上结论是否仍成立；数量多不自动奖励。",
+      "support": "同样计算/人工成本使至少一个关键决策从未知变为可行动，且没有以反复偷看确认数据换结论。",
+      "refute": "实验只产生更多分支、不能排除任何解释，或选择过程只追旧表现。",
+      "failure_learning": "留下一张失败也能复用的假设—证据关系表。",
+      "evidence_ids": [
+        "GH03"
+      ],
+      "result_type": [
+        "F"
+      ],
+      "terms": [
+        "overfit",
+        "oos",
+        "cross_review"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "R10",
+      "title": "把筛选器当成可被针对的规则",
+      "group": "H",
+      "kind": "radical",
+      "mechanism": "公开可猜的成交量、OI和突破规则可能被短时交易制造命中；研究在保持价格/成交/持仓记账一致的条件下，最小多大行为就能让无持续需求的币排到前列。",
+      "challenge": "挑战指标命中一定来自有价值需求，也挑战复杂模型更难被欺骗。",
+      "project_relation": "并行于A1；增量是离线构造与真实失败案例匹配的攻击族，不向市场发单、不制造真实交易。",
+      "upside": "若筛选脆弱性集中于少数可伪造特征，改用独立来源确认可能改变上限；也可能只是工程压力测。",
+      "data": "已知公开操纵事件、完整成交和持仓变化；没有交易级资料时仅做受限模拟，不能断言已被操纵。",
+      "decision_time": "在行情启动前已能获得的数据范围内构造挑战。",
+      "availability": "模拟样本必须单列，不能混进真实胜率；不能读取未来结局设计某次实时攻击检测器。",
+      "baseline": "当前分数、简单趋势、去除单一易操纵特征的基线。",
+      "experiment": "先证明一类满足数据约束的假信号会击穿筛选；再盲测真实公开失败事件，检查新增防护误杀的大赢家。",
+      "support": "同等及时赢家覆盖下降低特定假信号，且不靠全体降级回避问题。",
+      "refute": "只对人工设定攻击有效，实际案例不符，或防护拦掉真正早期赢家。",
+      "failure_learning": "知道筛选具体依赖哪些无法从现有字段验证的假设。",
+      "evidence_ids": [
+        "GH04"
+      ],
+      "result_type": [
+        "B",
+        "F"
+      ],
+      "terms": [
+        "oi",
+        "taker",
+        "overfit"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "R11",
+      "title": "研究注意力之外的强制日历",
+      "group": "G",
+      "kind": "radical",
+      "mechanism": "公开借币到期、做市协议终止、担保品资格变化或迁移截止，可能迫使参与者在特定时间行动；这些约束与普通利好消息不同，可能形成可观察的需求/供给时钟。",
+      "challenge": "挑战只有新闻热度或技术形态才给启动时点。",
+      "project_relation": "扩展B3，但独立于泛公告打分；增量是要求事件改变了谁的强制动作、在何时发生。",
+      "upside": "若少量强约束可事前核实，可能提供不同于现有行情的提前量；公开资料覆盖是大未知。",
+      "data": "带版本和时间的借币/保证金/项目协议公告、有效日、实际执行记录；不推测私有做市合约。",
+      "decision_time": "公告实际取得后至生效前，分别定义观察与重新评估时点。",
+      "availability": "公布时间与生效时间分开；无法追溯的约束列未知，不能以涨价反推存在协议。",
+      "baseline": "相似普通公告、相同市场环境无约束变更币、仅价格/OI基线。",
+      "experiment": "先人工收集公开且有失败对照的完整事件组，查公告能否预测方向或仅波动；发现真差异再扩大，撤销/延期也保留。",
+      "support": "参与者约束改变之后出现预测的交易变化，且提前信息产生可执行机会。",
+      "refute": "事件已被提前消化、方向相反或动作无法从公开资料核实。",
+      "failure_learning": "划清可验证参与者动机与漂亮故事的边界，决定是否值得补数据。",
+      "evidence_ids": [],
+      "result_type": [
+        "C",
+        "D"
+      ],
+      "terms": [
+        "catalyst",
+        "funding_rate",
+        "short_squeeze"
+      ],
+      "status": "待验证"
+    },
+    {
+      "id": "R12",
+      "title": "按同一经济权益而非币面单价研究倍数",
+      "group": "H",
+      "kind": "radical",
+      "mechanism": "代币合并拆分、迁移兑换、弹性供应和分发权益会改变一单位代表的资产；某些名义倍数可能是计价单位变化，另一些真实持有收益可能不在单价里。",
+      "challenge": "挑战一条价格K线足以定义多倍机会及不同代币代码即不同机会。",
+      "project_relation": "扩展已做BTC计价和来源身份核对；增量是权益连续性和完整持有回报，不重做相同的计价审计。",
+      "upside": "可能重画可捕捉机会地图；不是声称大部分现有事件无效。",
+      "data": "公告生效时点、兑换比例、可申领资格、交易费与价格历史、停牌/可卖性；无凭证则未知。",
+      "decision_time": "每次当时已经公布且确实可以执行的权益变化时。",
+      "availability": "不把后来公布的补偿加入当时买入理由；分发仅在持有者当时合资格且可领取时计入结果。",
+      "baseline": "原始单价倍数、仅拆分修正的价格系列。",
+      "experiment": "从事件库筛出有明确迁移/兑换公告的案例与未发生变更对照，逐案对账投入一单位后来可兑现什么，保留价格与权益两本账。",
+      "support": "能定位错误名义赢家或漏记的真实机会，且对发现/持有选择有具体影响。",
+      "refute": "差别仅是图表显示，无法改变任何可执行判断。",
+      "failure_learning": "明确旧价格标签在哪些资产上可用，防止把数据修复当策略收益。",
+      "evidence_ids": [],
+      "result_type": [
+        "A",
+        "E"
+      ],
+      "terms": [
+        "symbol",
+        "pump",
+        "backtest"
+      ],
+      "status": "待验证"
+    }
+  ]
+}

@@ -1,0 +1,655 @@
+{
+  "model_tag": "gpt6astra",
+  "round": 1,
+  "status": "独立首轮研究卡完成；全部待验证，尚未交叉讨论或执行收益实验",
+  "evidence_scope": "本轮真实取得公开页面与指定访谈转写；出处分本人、机构、原始采访主持人/同事、文学转述和访问缺口。九位均检索，但核心原文覆盖不齐，未用记忆补齐。result_type表示拟检验目标而非已经实现的效果。",
+  "sources": [
+    {
+      "id": "AC01",
+      "url": "https://www.georgesoros.com/2014/01/13/fallibility-reflexivity-and-the-human-uncertainty-principle-2/",
+      "title": "Fallibility, Reflexivity, and the Human Uncertainty Principle",
+      "author": "George Soros",
+      "published": "2014-01-13",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_full_text_http_200",
+      "quote": "these imperfect views can influence the situation to which they relate through the actions of the participants.",
+      "supports": "人的判断会改变其行动，行动又会改变被判断的市场；可据此提出价格—融资—新需求的反馈假设。",
+      "limits": "哲学及市场机制论述，不是本项目的事前交易样本；不能据此断言某币已形成正反馈，也不能推出何时卖出。"
+    },
+    {
+      "id": "AC02",
+      "url": "https://www.seykota.com/tribe/TSP/EA/index.htm",
+      "title": "A Simple Trading System: Exponential Average Crossover",
+      "author": "Ed Seykota / Trading Systems Project",
+      "published": "2005-10-26（TSP索引列出的更新日期）",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_full_text_curl_exit_0",
+      "quote": "Signals issue right after the close. The system enters orders overnight, to enter positions on the open of the first trading day after a signal issues.",
+      "supports": "本人网站公开系统明确分开信号收盘与下次开盘执行，并给出买卖规则、持有及交易记录；另提示频繁交易时成交偏差影响大。",
+      "limits": "教学用标普期货回测，连续合约及成交模拟具有特定假设，且原例未收佣金；不是本人私有策略或加密盈利证明。"
+    },
+    {
+      "id": "AC03",
+      "url": "https://www.tradingblox.com/originalturtles/originalturtlerules.htm",
+      "title": "The Original Turtle Rules — Free Complete Trading System Rules",
+      "author": "Trading Blox；页面称由原始海龟学员公开 Richard Dennis 与 William Eckhardt 教授的规则",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "retrieved_participant_publication_landing_page_http_200_pdf_extraction_incomplete",
+      "quote": "The two breakout systems, and the entry rules for each; Position sizing based on N (average true range) and dollar volatility",
+      "supports": "同一套公开体系将进入、按波动衡量风险、加码、退出及相关持仓限制合并；支持研究完整路径而非只优化筛选分。",
+      "limits": "本轮只完整读到发布页，PDF读取超时后已停止；不是Dennis/Eckhardt本人逐字访谈，未核准具体参数，不能引用其收益或参数。"
+    },
+    {
+      "id": "AC04",
+      "url": "https://www.gutenberg.org/files/60979/60979-h/60979-h.htm",
+      "title": "Reminiscences of a Stock Operator",
+      "author": "Edwin Lefèvre；与 Jesse Livermore 相关的文学化人物叙述",
+      "published": "1923",
+      "accessed": "2026-10-19",
+      "status": "retrieved_historical_literary_text_http_200_not_personal_transcript",
+      "quote": "I often took profits and waited for a reaction that never came.",
+      "supports": "文本提出提前兑现再等回落可能失去后续上涨的机制，适合提出固定兑现与继续持有的对照。",
+      "limits": "不是 Livermore 本人著作或录音，本句归作者笔下人物，不伪装为真人原话；文学经历不等于可核对交易记录。"
+    },
+    {
+      "id": "AC05",
+      "url": "https://www.snb.ch/en/publications/communication/press-releases/2015/pre_20150115",
+      "title": "Swiss National Bank discontinues minimum exchange rate and lowers interest rate to -0.75%",
+      "author": "Swiss National Bank",
+      "published": "2015-01-15",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_announcement_landing_page_http_200",
+      "quote": "Swiss National Bank discontinues minimum exchange rate",
+      "supports": "官方公告确认汇率政策约束被取消；支撑制度可改变和旧价格边界会失去依据的反例。",
+      "limits": "只读取公告标题、日期和PDF入口，不能由此报告当日最大跌幅、具体成交价或事前可预测性；不把央行政策机械等同加密规则。"
+    },
+    {
+      "id": "AC06",
+      "url": "https://www.eia.gov/todayinenergy/detail.php?id=43495",
+      "title": "Low liquidity and limited available storage pushed WTI crude oil futures prices below zero",
+      "author": "U.S. Energy Information Administration",
+      "published": "2020-04-27",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_agency_analysis_http_200",
+      "quote": "the scarcity and high cost of available crude oil storage meant several market participants were heavily incentivized to close their positions before having to physically settle their contracts",
+      "supports": "2020-04-20到期期货的储存和交割限制造成被迫卖出；证明强制流向可能向下，不能见到拥挤就预测上涨。",
+      "limits": "这是事后政府分析，不能作为4月20日之前已知的信息；原油实物交割不同于加密永续，不可照搬负价机制。"
+    },
+    {
+      "id": "AC07",
+      "url": "https://www.etmc.com/",
+      "title": "Eckhardt Trading Company official site",
+      "author": "Eckhardt Trading Company",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "access_blocked_http_403",
+      "quote": "",
+      "supports": "仅记录访问缺口；Eckhardt思想本轮暂以AC03参与者材料为限。",
+      "limits": "未读取本人或公司研究正文，不引用记忆中的语录、不推测私有系统。"
+    },
+    {
+      "id": "AC08",
+      "url": "https://lindaraschke.net/",
+      "title": "Linda Raschke official site",
+      "author": "Linda Raschke",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "access_blocked_http_406_mod_security",
+      "quote": "",
+      "supports": "仅记录官网访问缺口；另找公开采访。",
+      "limits": "本来源不支持任何具体模式或收益主张。"
+    },
+    {
+      "id": "AC09",
+      "url": "https://www.tudor.com/Content/Articles/Articles/TheGreatMonetaryInflation.pdf",
+      "title": "The Great Monetary Inflation — previously circulated Tudor URL",
+      "author": "归属待核实；URL位于Tudor官网",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "unavailable_http_404",
+      "quote": "",
+      "supports": "仅记录Paul Tudor Jones原信获取缺口。",
+      "limits": "未取得原信，不能据文件名断言原文作者、日期、配置比例或观点。"
+    },
+    {
+      "id": "AC10",
+      "url": "https://minervini.com/",
+      "title": "Minervini Markets 360",
+      "author": "Mark Minervini 官方产品网站",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_product_page_http_200",
+      "quote": "Mark Minervini’s personal stock screens—ranging from high-momentum criteria to fresh IPOs",
+      "supports": "官方公开产品介绍确实包含强势股、新上市股票、领导地位和市场时点等研究范围。",
+      "limits": "产品宣传只支持公开关注范围，不支持某具体模式的预测能力、真实收益或已验证规则；不可据此把收缩结构套成本项目结论。"
+    },
+    {
+      "id": "AC11",
+      "url": "https://www.investors.com/how-to-invest/investors-corner/eight-week-hold-rule-keeps-winners/",
+      "title": "A Fast Start Is A Clue To A Hot Stock's Long Advance",
+      "author": "Investor's Business Daily，具体作者未取得",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "retrieved_title_and_navigation_http_200_article_body_not_verified",
+      "quote": "A Fast Start Is A Clue To A Hot Stock's Long Advance",
+      "supports": "仅确认O'Neil创办机构公开文章讨论快速启动与长程上涨；需补原文才可核准具体持有规则。",
+      "limits": "未取得可核准正文，不把标题扩写成8周或20%规则；也不把机构作者冒称O'Neil本人。"
+    },
+    {
+      "id": "AC12",
+      "url": "https://www.sec.gov/newsroom/press-releases/2021-212",
+      "title": "SEC Staff report release URL",
+      "author": "U.S. Securities and Exchange Commission",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "access_blocked_http_403_rate_threshold",
+      "quote": "",
+      "supports": "只记录GME相关监管材料访问缺口。",
+      "limits": "未读报告，不引用关于轧空是否主因的数字或结论。"
+    },
+    {
+      "id": "AC13",
+      "url": "https://www.porsche-se.com/en/media/press-releases/detail/porsche-heads-for-domination-agreement-1",
+      "title": "Porsche heads for domination agreement",
+      "author": "Porsche Automobil Holding SE",
+      "published": "2008-10-26",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_company_release_curl_exit_0",
+      "quote": "Porsche SE held 42.6 percent of the Volkswagen ordinary shares and in addition 31.5 percent in so called cash settled options",
+      "supports": "公告公开其股票及现金结算期权敞口，并自述空头数量超出预期；可检验新的持仓披露是否改变可交割供给预期。",
+      "limits": "利益相关公司的自述；现金结算期权不等于实际持有股份，不能把74.1%一概称为被锁定现股，也不能以公告反推此前市场已知这些数字。"
+    },
+    {
+      "id": "AC14",
+      "url": "https://www.porsche-se.com/en/media/press-releases/detail/short-sellers-responsible-for-extreme-price-movements-in-volkswagen-ordinary-shares-1",
+      "title": "Short Sellers Responsible for Extreme Price Movements in Volkswagen Ordinary Shares",
+      "author": "Porsche Automobil Holding SE",
+      "published": "2008-10-30（网页日期）；正文署2008-10-29",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_company_release_curl_exit_0",
+      "quote": "Porsche SE intends - depending on the state of the market - to settle hedging transactions in the amount of up to five per cent",
+      "supports": "同一持仓方在剧烈涨价后宣布可能处理部分对冲交易以提高流动性；被动买入需求并不保证长期持续。",
+      "limits": "公司声称空头被迫买回和股价超过1000欧元，属于当事方解释；非独立调查，不能拿计划的5%当已完成。日期冲突保留，不擅自统一。"
+    },
+    {
+      "id": "AC15",
+      "url": "https://www.investors.com/ibd-university/how-to-sell/taking-profits/",
+      "title": "When to Take Profits",
+      "author": "Investor's Business Daily（文内引用创办人William J. O'Neil）",
+      "published": "unknown",
+      "accessed": "2026-10-19",
+      "status": "retrieved_primary_institution_education_full_text_http_200",
+      "quote": "So in most cases (see the 8-week hold-rule exception), you're better off locking in your gains",
+      "supports": "机构教程明确把多数20%–25%兑现与继续持有例外分开；可提出状态依赖的退出对照。",
+      "limits": "是机构教学，非本人完整访谈；百分比和8周源于其股票框架，不能默认移植到加密；本文没有证明实测优于长期持有。"
+    },
+    {
+      "id": "AC16",
+      "url": "https://chatwithtraders.com/episode/048-linda-raschke-trading-a-framework-of-your-own-and-using-models-to-study-price-behavior-w-a-market-wizard",
+      "title": "048: Linda Raschke – Trading a Framework of Your Own, and Using Models to Study Price Behavior",
+      "author": "Chat With Traders采访Linda Raschke；页面为主持人导言",
+      "published": "2015-11-26",
+      "accessed": "2026-10-19",
+      "status": "retrieved_original_interview_host_page_http_200_audio_not_listened",
+      "quote": "adapting to environment changes, using models to study price behavior",
+      "supports": "主持人原始访谈页面确认讨论环境适应和用模型研究价格行为。",
+      "limits": "本轮只取得节目导言，未收听音频或取得该集逐字稿；不将导言当Linda原话，也不据此归因具体Turtle Soup模式或收益。"
+    },
+    {
+      "id": "AC17",
+      "url": "https://chatwithtraders.com/episode/334-andrew-perry",
+      "title": "334 · Andrew Perry - What $450M Portfolio Manager Learned From Paul Tudor Jones",
+      "author": "Chat With Traders采访Andrew Perry；网页提供带时点逐字稿",
+      "published": "2026-10-14",
+      "accessed": "2026-10-19",
+      "status": "retrieved_original_interview_with_transcript_http_200",
+      "quote": "If I look at Paul Jones, what's he really good at? I mean, he's exceptional at changing his mind.",
+      "supports": "同事在原始访谈03:05处称PTJ能改变看法；全文主题包含时限与环境适应，支持以新反证更新假设的研究方向。",
+      "limits": "Perry关于PTJ的回忆，不是PTJ本人访谈；转写未经音频逐字核对，广告会改变时间。不能将Perry的五支柱或55%胜率主张归给PTJ，更非加密验证。"
+    }
+  ],
+  "hypotheses": [
+    {
+      "id": "H01",
+      "title": "快速启动后切换到保留利润的持有规则",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：持续买入可能分批到来，最强的启动会继续扩展；在统一小目标兑现会提前截断这段利润，先识别持续性再改变持有规则可能更合适。",
+      "challenge": "反对者：加速也可能是最后一轮追涨，放宽持有只会把已有利润吐回；经典股市持有例外不证明加密适用。",
+      "project_relation": "扩展A1进入/持有链，增量是只对当时已确认快速启动的对象切换退出状态，而非统一取消止盈；复用B10记录，C3只可解释当时证据。",
+      "upside": "影响持有与兑现，可能保住已经发现的大赢家后半段；代价是部分获利单回吐，不预设值得。",
+      "data": "A1同一批入选与参考价、小时收盘价/成交额、未来完整价格路径、成交成本情景；不需要新增外部来源。",
+      "decision_time": "最早在首次入选后的完整小时出现预先定义的累计上涨和连续收盘确认时；确认前仍按原退出。",
+      "availability": "信号用收盘后才可得的历史；成交从下一完整5分钟开盘起算；缺口和未成熟单独留存。",
+      "baseline": "相同进入、相同资金约束下，比较现有固定收益距离参考、统一趋势退出、以及只对快速启动者切换退出；另保留随机选币与简单趋势入选对照。",
+      "experiment": "先在未排序的小样本冻结启动强度/确认长度候选，逐步回放30个包含直涨、回落、失败的完整候选；输出每笔确认时间、两条退出、回吐和剩余多倍贡献，再留新时期确认。",
+      "support": "相同进入与成本下，切换者的大赢家实际退出贡献在两个不重叠确认时期都增加，且损失路径未超实验前约定的共同约束。",
+      "refute": "增益只来自使用未来峰值识别强启动；或提高回吐后净贡献消失；或只有单个事后选中的币支撑。",
+      "failure_learning": "可分清问题出在没有发现、发现后卖早，还是加速通常意味着末端；即使失败也能界定哪些机会不宜给更长持有。",
+      "evidence_ids": [
+        "AC04",
+        "AC15"
+      ],
+      "result_type": [
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "drawdown",
+        "risk_reward",
+        "oos",
+        "lookahead_bias"
+      ]
+    },
+    {
+      "id": "H02",
+      "title": "短突破失败后，按新的收回证据重新参与",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：同一价位附近的卖压可能先触发短线退出，随后才被持续买盘消化；收回和保持价位是新证据，不能因第一次失败就永久排除。",
+      "challenge": "反对者：连续尝试会把同一坏币重复收费；事后赢家的每次下跌都能被误称洗盘。",
+      "project_relation": "A1和STRATEGY_REVIEW第8.3节已有首次突破/收回/重入，本文不把重入本身冒称新创；增量是以时间顺序与成交额是否恢复区分‘真新增证据’和重复提醒，关联B1的评估时点。",
+      "upside": "影响进入与继续参与，可能回收初次止损后才发生的大行情；增加尝试次数和费用。",
+      "data": "同一币连续小时OHLCV、首次突破和失效记录、唯一行情ID；必要时用现有5分钟数据确定先跌后收回，无法确认则标顺序未知。",
+      "decision_time": "首次跌破预先定义价位以后，新的完整收盘收回该位且成交额满足冻结条件之时；不是未来上涨以后。",
+      "availability": "重入证据严格晚于首次退出；所用结构只由破位前数据生成；小时内先后不明时不得给完美成交。",
+      "baseline": "固定相同币池与首次进入，比较仅一次尝试、仅价格收回再试、价格收回加成交额恢复；保持累计风险和成本口径相同。",
+      "experiment": "复用A1逐案路径，先列全部首次失败者，再冻结最多两次额外研究尝试和收回持续时间；统计无收回、收回再败、直涨无回撤三组，输出每次费用与同波总收益。",
+      "support": "新证据版本比纯价格重入减少重复失败，并保住一次尝试漏掉的后续上涨；按同波汇总后优势仍在。",
+      "refute": "把重复观察当独立成功后才有优势；或新增交易成本吃掉贡献；或只能回看赢家才能选收回位。",
+      "failure_learning": "即便不改善收益，也可知道错过是去重规则造成还是进入依据不足，从而不再把‘允许重入’误当自动多次买入。",
+      "evidence_ids": [
+        "AC03",
+        "AC16"
+      ],
+      "result_type": [
+        "A",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "c_breakout",
+        "box",
+        "hindsight",
+        "event_backtest",
+        "drawdown"
+      ]
+    },
+    {
+      "id": "H03",
+      "title": "把被迫买入与被迫卖出分成不同队列",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：合约终止、保证金变化或交付义务能让参与者必须减仓；方向由谁负有义务决定，不由拥挤或负费率本身决定。",
+      "challenge": "反对者：可公开看见的条款早已被价格反映；无法知道持仓人实际减仓意愿，错分方向会正好反着做。",
+      "project_relation": "扩展B3催化剂和A1合约特征：在公告类型之外记录义务方、到期时间、可替代退出途径；不恢复已被否掉的‘负费率直接加分’。",
+      "upside": "影响发现、排序和兑现；可少盯无强制需求的热门币，并在强制需求结束后减少盲目续抱，不能保证更早。",
+      "data": "交易所公开公告原文与首次取得时刻、对应合约规则、现货/合约OHLCV和OI；实际仓位方向不可得时保持未知。",
+      "decision_time": "公告已公开且条款明确的第一轮正常查询；临近执行时重新核对公告是否更改。",
+      "availability": "不能把事后监管说明当事前输入；历史仅有公告日期时按保守次日及延迟情景测试，不假造分钟时间。",
+      "baseline": "相同公告币池下比较公告即观察、只看OI/价格、以及义务方向和截止时间分组；与现有A1评分、简单趋势、随机选取对照。",
+      "experiment": "先对20个不同条款公告双人独立编码为买方义务/卖方义务/未知，冻结判读后回放；输出方向判错、发布时间不明及未启动对象。",
+      "support": "方向编码在看结果前可复核，买方义务组相对同等热度对照有新增可参与上涨，且卖方义务组减少错误持有。",
+      "refute": "方向只能事后解释，或相同条款两方向无差别；强制截止前可买到的空间已经很少。",
+      "failure_learning": "能判断‘轧空’究竟是可用的事前信息，还是事后故事；还可确认最缺的是条款时点还是仓位结构。",
+      "evidence_ids": [
+        "AC06",
+        "AC13",
+        "AC14"
+      ],
+      "result_type": [
+        "B",
+        "C",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "liquidation",
+        "short_squeeze",
+        "funding_rate",
+        "oi",
+        "delisting"
+      ]
+    },
+    {
+      "id": "H04",
+      "title": "退出依据跟随机会期限，而非统一时长",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：有截止日的强制需求与无固定截止的持续需求，结束方式不同；用相同持有时长会在前者卖晚、后者卖早。",
+      "challenge": "反对者：机会类型往往不确定；多套退出增加自由度，足以事后挑出漂亮曲线。",
+      "project_relation": "扩展A1持有兑现与B3事件类型；增量是把公开义务期限与持续趋势分开，保留统一退出作为最强简单对手。",
+      "upside": "影响兑现和继续参与，可能同时减少挤压结束后的回吐及长期趋势的提前退出；错分类可能损害两边。",
+      "data": "候选首次记录、公告是否有确定期限、小时价格、OI和成本；没有事件证据的对象保留未知类别。",
+      "decision_time": "进入前根据已知信息冻结类型；仅在新公告、需求结束或价格失效证据出现后更新，不用未来涨幅改类型。",
+      "availability": "使用公告实际取得时间，迟到资料只能用于诊断；可执行退出时间晚于类别更新。",
+      "baseline": "同一入场比较统一趋势退出、统一固定持有期、类型对应退出；未知类别走统一基线。",
+      "experiment": "先选包含20个有期限事件与20个无期限普通候选的有限集合，固定两类规则及更新条件；报告分类错误、停留时间、回吐和净贡献。",
+      "support": "同等成本和共同损失约束下，两类退出各自改善对应群体，且合并净贡献增加，不只改了描述。",
+      "refute": "类型信息没有改变任何当时行为；或收益提升只在事后改类别后出现；或未知组被偷偷剔除。",
+      "failure_learning": "检验持有问题需不需要更多机制资料；如果统一趋势退出已经足够，就可停止增加类别。",
+      "evidence_ids": [
+        "AC02",
+        "AC14",
+        "AC17"
+      ],
+      "result_type": [
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "drawdown",
+        "oos",
+        "control_group"
+      ]
+    },
+    {
+      "id": "H05",
+      "title": "新增证据决定增加参与，浮亏不构成加码理由",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：早期不确定性较大，后续真实需求和价格确认可能提供更多信息；以证据发生顺序增加参与，比一次押对全部时间更可能保留赢家而限制重复错误。",
+      "challenge": "反对者：确认越充分买得越贵，赢家不回头时会买不够；分批只是改变暴露，不创造预测能力。",
+      "project_relation": "扩展A1进入到持有的缺失链条，借海龟体系研究进入/加码/退出的配合；没有获批仓位参数，所有比例只是共同情景，不能自动实盘采用。",
+      "upside": "影响进入、持有与继续参与；可能让少数不断兑现机制证据的赢家贡献更多，代价是追高与额外费用。",
+      "data": "首次进入、后续新公告/持续价格确认时刻、逐步成交参考和费用；用完整同波记录避免把多次加码算多次命中。",
+      "decision_time": "后续新证据首次完整可用后；价格仅因为低于成本不触发额外参与。",
+      "availability": "每次新增依据均保存时间和来源；资金变化只能从上一次实际成交后计算，不能用未来盈利预支。",
+      "baseline": "相同最大累计研究暴露与损失预算情景下比较一次进入、按时间等分、按新增证据分批；退出一致。",
+      "experiment": "对同一30条成熟路径固定分批次数与上限情景，分别计算直接拉升、来回震荡、先失败后恢复；列出哪次证据带来增量而非只报总收益。",
+      "support": "相同累计约束下，证据分批对大赢家贡献与失败损失的取舍优于时间等分，在成本翻倍情景仍保留方向。",
+      "refute": "只因偷偷增加总投入或承受损失才变好；同等暴露下确认滞后和成本抵消价值。",
+      "failure_learning": "分清价值来自更好的证据还是投入更多；若只是后者，就不把仓位变化包装成新的选币能力。",
+      "evidence_ids": [
+        "AC03",
+        "AC17"
+      ],
+      "result_type": [
+        "D",
+        "E"
+      ],
+      "terms": [
+        "risk_reward",
+        "equity_curve",
+        "drawdown",
+        "lookahead_bias"
+      ]
+    },
+    {
+      "id": "H06",
+      "title": "从同群体里找持续领先者，同时保留孤立启动通道",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：同一类资金进入多个相关币时，持续领先者可能更先获得关注与后续资金；但完全独立的供求事件可能不需要同类上涨。",
+      "challenge": "反对者：强者排名只是在追涨；固定只看同类龙头会漏掉尚未出现群体效应的独立大赢家。",
+      "project_relation": "扩展A1固定容量排序，增量是既比较同群体竞争又预留独立事件通道；不把它改成统一BTC趋势硬过滤。B3负责事件证据。",
+      "upside": "影响排序与发现，在相同人工容量下可能少看同步跟随者、增加有效机会种类；也可能漏掉后来反超的滞后币。",
+      "data": "过去一段时间的相对涨幅/成交额、当时已有的项目分类或只用过去价格建立群组、首次事件记录；分类版本要保存。",
+      "decision_time": "每轮正常查询收盘数据完整后，先用之前的数据确定组别再排序，独立事件通道按已发布证据进入。",
+      "availability": "不得用今日流行叙事回填早期群组；缺分类仍进入未分组队列；只用过去价格的组别提供低成本替代。",
+      "baseline": "同容量下对照A1总分前N、全市场简单趋势前N、随机N、分组领先者及分组加独立通道。",
+      "experiment": "在同一历史时序底账上检验N=5/10/20/40整条容量曲线，不让用户先定N；报告普通跟随者减少数、独立启动遗漏和每天换币量。",
+      "support": "同容量净增加首次可参与的大赢家，独立通道确实补回分组法的漏选，且不是靠每日换更多币达成。",
+      "refute": "只改善事后最高涨幅而无发现后空间；或者每天新币数上升，实际人工成本反而更高。",
+      "failure_learning": "能判断拥挤来自同一机会重复展示还是规则没辨别领先者；分类无增量时保留简单全市场排序。",
+      "evidence_ids": [
+        "AC10",
+        "AC01"
+      ],
+      "result_type": [
+        "A",
+        "B",
+        "C"
+      ],
+      "terms": [
+        "candidate_pool",
+        "cross_section",
+        "macro_regime",
+        "false_negative"
+      ]
+    },
+    {
+      "id": "H07",
+      "title": "坏消息后的承接强弱作为新证据",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：一条本应增加卖压的公开信息出现后，如果价格没有继续下落且成交恢复，可能说明新增需求已吸收卖压；判断来自消息后的反应，不是给消息本身贴涨跌标签。",
+      "challenge": "反对者：所谓‘本应下跌’由研究者主观决定，坏消息可能已提前传播；反应慢也可能只是成交不活跃。",
+      "project_relation": "扩展B3由事件发现到观察后的判断；增量是公开信息方向与实际承接的偏离，而不是重复‘公告加分’。B10保存首次见闻。",
+      "upside": "影响观察、进入与持有，可能识别分数暂弱但承接变强的机会；反应确认会牺牲最早价格。",
+      "data": "事前已列出的公告类别、公开及取得时间、消息后若干完整小时价量、消息前流动性；明确无法取得的泄露信息未知。",
+      "decision_time": "公告后固定观察窗口结束之时；例如探索中比较1/3/6小时，确认实验前冻结，不按赢家挑最佳窗。",
+      "availability": "分类人在不知道未来价格时标潜在卖压；只用窗口内已经收盘数据，执行从下一可成交参考时刻开始。",
+      "baseline": "同类型消息下比较消息立即观察、消息加简单趋势、消息加承接反应，与A1评分及随机选择比较。",
+      "experiment": "先从公告时间可信的30条事件出发，包含持续下跌和无反应；双盲标注消息方向，保留分歧，输出窗口后收益/损失路径。",
+      "support": "事前可重复的反应判读在同公告类别内区分后续持续性，并带来可成交后增益，而不仅是减少几个坏例子。",
+      "refute": "消息方向一致性差，或承接组只因更高流动性而占优；延迟一轮后优势全部消失。",
+      "failure_learning": "可判断事件内容重要还是价格反应重要，也能给未来AI解释限定必须等待的可观察证据。",
+      "evidence_ids": [
+        "AC01",
+        "AC14"
+      ],
+      "result_type": [
+        "B",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "quote_volume",
+        "control_group",
+        "lookahead_bias"
+      ]
+    },
+    {
+      "id": "H08",
+      "title": "价格走强但迟迟没有后续进展时降级观察",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：若买盘仅短暂集中，首次强势以后会迅速缺乏跟进；在完整观察期限内没有新高、成交和机制证据，继续占用关注可能挤掉新机会。",
+      "challenge": "反对者：大行情可能需要很久才启动；统一等待期限会淘汰慢热赢家，降低提醒不代表保住利润。",
+      "project_relation": "扩展A1真实关注成本与B10重复记录，增量是根据承诺的进展降级，而非仅按重复出现次数删除；后续出现新证据仍可重入观察。",
+      "upside": "影响有限关注与继续参与，可能释放盯盘名额；会牺牲慢启动阶段的持续陪伴，需要完整漏选账。",
+      "data": "首次入选时间、当时机制预期、每轮价量和新证据、每天实际新增币数；没有机制预期时只用统一基线。",
+      "decision_time": "达到事先冻结的观察期限而没有约定进展时降级；有新的可用证据则独立恢复，而不是从未来启动回填。",
+      "availability": "首次入选时写下等待什么；迟到解释不能改变此前期限；未知未来标签不影响状态。",
+      "baseline": "同固定人工容量比较永久重复留榜、固定冷却、按未进展降级；降级者继续机器观察，保留原始广发现。",
+      "experiment": "先回放连续两周完整查询，输出每次降级/恢复/被顶替对象和其后路径；容量曲线与每日人工量并报，不能只看每轮列表长度。",
+      "support": "同等每日人工量下新增可参与机会更多，慢热赢家损失可量化且并非净增益的来源；恢复机制能补回合理重启。",
+      "refute": "少看币主要靠把还未涨起来的大赢家提前删掉；或下降的是显示量，后台换币仍造成更多人工工作。",
+      "failure_learning": "区分注意力浪费来自重复提醒还是等待本身有价值；无优势就保留更简单的冷却/排序。",
+      "evidence_ids": [
+        "AC02",
+        "AC16"
+      ],
+      "result_type": [
+        "A",
+        "B",
+        "C"
+      ],
+      "terms": [
+        "candidate_pool",
+        "false_negative",
+        "hindsight",
+        "calibre"
+      ]
+    },
+    {
+      "id": "H09",
+      "title": "制度变化后暂时重置旧价格边界的解释",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：交易规则、融资资格、抵押折扣或稳定汇率承诺改变后，过去买卖行为的约束已变；旧支撑和均线可能仍描述价格，却不再代表原来的参与者动机。",
+      "challenge": "反对者：制度信息稀少，价格趋势已经包含其影响；增加制度层只会让模型在每次失败后找借口。",
+      "project_relation": "扩展B3和A1机制失效归因；增量是记录哪条旧假设被撤销以及何时恢复，而非全局增加宏观打分。",
+      "upside": "影响进入、持有、继续参与，可减少按失去依据的旧边界反复尝试，也可能更早看到规则变化产生的新趋势。",
+      "data": "明确且已公布的交易/抵押/结算规则变更、实行时间、价格路径；只有传言则维持未确认状态。",
+      "decision_time": "规则正式公开并可读后；若实施日期不同，公告期和实施期各自保留，不能混成一个日期。",
+      "availability": "保留原公告版本、取得时间和后续修改；不把2015瑞郎事后变化当作早已可预测。",
+      "baseline": "相同候选下比较现有评分持续应用、规则变更期间暂停旧边界解释、以及仅价格趋势适应；不默认暂停交易更好。",
+      "experiment": "先对10至20次规则明确的事件做有限逐案，逐一列旧规则会给的行动、被撤销前提、变更后行动和错过收益；样本少时只检验可操作性。",
+      "support": "在新时期可复核地少做错误的重复尝试，同时保留新趋势的大赢家贡献；规则更新比仅价格变化提供额外信息。",
+      "refute": "无法在当时明确哪项约束变了，或更新时价格早已完成变化；改变规则说明但实际行动不变。",
+      "failure_learning": "确定制度资料值得采集的具体范围；若仅价格足够，不建广泛宏观监控。",
+      "evidence_ids": [
+        "AC05",
+        "AC17",
+        "AC06"
+      ],
+      "result_type": [
+        "C",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "macro_regime",
+        "gate",
+        "oos"
+      ]
+    },
+    {
+      "id": "H10",
+      "title": "持有多个币时按共同失败原因检查集中度",
+      "group": "A/C",
+      "kind": "standard",
+      "mechanism": "待验证：不同币可能依赖同一类融资、同一交易平台或同一叙事买盘；表面多币并未增加继续参与能力，共同驱动撤退时会同时损失。",
+      "challenge": "反对者：同源强行情也能同时贡献大赢家，机械分散会把最好的机会拆掉；相关价格不一定代表同一失败原因。",
+      "project_relation": "扩展A1机会到资金路径的接口；增量是同一原因同时失效情景，关联B3事件和C3证据核查；不擅自给用户确定仓位上限。",
+      "upside": "影响持有与继续参与，可能减少一次共同事件耗掉未来参与能力；代价是最强同类行情中少赚部分上涨。",
+      "data": "当时已有的行业/平台/抵押关系、过去共同价格变化、候选进入和退出记录；缺关系资料的对象单列未知。",
+      "decision_time": "进入第二个具有相同已知失败原因的机会之前，再检查合计暴露情景；并在新公告改变关系时更新。",
+      "availability": "不能用事后一起下跌倒推此前已知群组；固定过去窗口并保留关系来源时间。",
+      "baseline": "相同资金与单笔规则下比较按币名均分、按过去价格相关分组、按可核对共同失败原因分组；容量与费用一致。",
+      "experiment": "在几组涨跌同时发生的成熟路径上先做情景检验，不估计精确破产概率；报告减少的共同损失、放弃的大赢家和恢复参与所需时间。",
+      "support": "在共同失败之外的时期仍保留多数上行贡献，并明确改善共同坏情景下继续参与的资金路径；不靠减少全部交易取胜。",
+      "refute": "共同原因只能事后识别，或几乎删除所有强势机会而无额外保护；与简单价格相关方案无区别。",
+      "failure_learning": "判断保护该放在单币退出、共同暴露还是执行平台层；若简单分组足够，不扩建复杂关系库。",
+      "evidence_ids": [
+        "AC03",
+        "AC06",
+        "AC17"
+      ],
+      "result_type": [
+        "D",
+        "E"
+      ],
+      "terms": [
+        "equity_curve",
+        "drawdown",
+        "macro_regime",
+        "control_group"
+      ]
+    },
+    {
+      "id": "R01",
+      "title": "不只找需求增长，而是找价格上涨创造需求的闭环",
+      "group": "A/C",
+      "kind": "radical",
+      "mechanism": "待验证：价格上升可能提高公开可核对的抵押额度、融资能力或奖励价值，新增资源又转为买盘；若能识别这条闭环，机会判断单位将由‘某币分数’改为‘反馈链是否继续运转’。",
+      "challenge": "反对者：融资用途不一定买币，抵押增加也可能只是账面估值；这种循环既能放大上涨，也能反向放大崩塌。",
+      "project_relation": "与A1并行的高上限难验证方向，扩展B3到价格内生改变需求；只复用身份/价格/时钟底账，不把公告数量当反馈强度。",
+      "upside": "影响发现、持有和失效判断，可能解释为何已涨很多仍有后续空间；代价是融资和真实流向证据昂贵，不能只靠价格图证明。",
+      "data": "规则生效时刻、抵押/发行/奖励机制、真实可观察融资或流量、价格及成本；优先有公开规则和实际记录的少量案例，不购买数据。",
+      "decision_time": "规则已生效且首次出现可以核对的新增资源转移之后；链条未完成时只保留观察，不能称闭环已成立。",
+      "availability": "逐段记录公开时间和实际行为发生时间；事后项目方总结只能作解释，不回填当时信息；无法观察的资金用途明确未知。",
+      "baseline": "相同币池下比较仅价格趋势、仅有利公告、价格加真实新增资源；再用规则相似但资金未进入的对象做反事实对照。",
+      "experiment": "先挑5至10个规则清楚的正向/反向/没有闭环案例，盲读先画可证伪链条；只要一环缺证据就停止因果结论，保存案例证据表而非造全市场模型。",
+      "support": "价格变化先于融资条件变化，真实新增资源再先于后续需求，且同等价格变化的无机制对象没有对应行为；后续确认再检验交易净价值。",
+      "refute": "实际资源变化先于价格；或所谓新增需求只是同一资金循环统计两遍；或流向与规则无关、价格基线解释同样好。",
+      "failure_learning": "能发现项目是否需要研究融资机制还是只需要更好的趋势持有；失败会明确断在哪一环，避免‘反身性’成为万能故事。",
+      "evidence_ids": [
+        "AC01",
+        "AC13",
+        "AC14"
+      ],
+      "result_type": [
+        "C",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "oi",
+        "market_cap",
+        "equity_curve",
+        "lookahead_bias"
+      ]
+    },
+    {
+      "id": "R02",
+      "title": "把机会跟踪对象从单币改为可转移的需求链",
+      "group": "A/C",
+      "kind": "radical",
+      "mechanism": "待验证：当同一种实际用途、融资渠道或买盘迁往替代币时，持有旧币可能失效但需求本身仍扩展；沿可证实的资金或使用迁移跟踪，可能接续同一大机会。",
+      "challenge": "反对者：所谓迁移可能只是事后把赢家串成故事；频繁切换会卖掉尚未结束的领先者，同时支付更多费用。",
+      "project_relation": "挑战A1以单币单波为中心的研究单位，但不替代其唯一身份底账；B3定义事前关系、B10保留每次交接，C3只负责可追溯解释。与普通分组龙头H06不同，它改变跨币接续与退出。",
+      "upside": "影响持续发现、持有和继续参与，可能跨多币保留需求扩张的利润；难点是事前关系和实际迁移证据，不能只看后来排名。",
+      "data": "在决策前已公开的替代关系、真实迁移/使用/成交记录、旧新币价格、跨币转换成本；缺直接流量只可做价格关系的较弱对照。",
+      "decision_time": "旧对象机制证据减弱且新对象出现预先规定的迁入证据之后；两者都没有就不切换。",
+      "availability": "事前冻结关系表和允许迁移类型；新币尚未上市或当时不可交易时不能给理想换币成交。",
+      "baseline": "相同起点和资金约束下比较始终持有原币、按当期最强币切换、按真实迁移证据切换；同一需求链总计收益，不按换币次数增加独立成功数。",
+      "experiment": "先用5条可追溯关系链做有限案例，必须包括需求衰退和错误切换；列每次切换证据、当时可得性、费用和放弃原币的后续收益，未取得迁移证据不升级全库开发。",
+      "support": "证据驱动的交接在未见过链条中比单纯追排名更能保留后续贡献，而且不是靠增加暴露或事后排掉失败币。",
+      "refute": "只有看未来赢家才知道该迁往哪；或真实迁移出现时涨幅已尽；或保持原币更有利。",
+      "failure_learning": "判断项目上限被币级视角限制，还是需求本来就难以追踪；失败案例可界定哪些关系值得持续记录。",
+      "evidence_ids": [
+        "AC01",
+        "AC10",
+        "AC15"
+      ],
+      "result_type": [
+        "A",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "catalyst",
+        "symbol",
+        "candidate_pool",
+        "false_negative",
+        "lookahead_bias"
+      ]
+    },
+    {
+      "id": "R03",
+      "title": "让广泛随机发现挑战精挑细选，专门检验持有的贡献",
+      "group": "A/C",
+      "kind": "radical",
+      "mechanism": "待验证：稀有大赢家的主要损失可能发生在持有阶段，而不是初筛；在相同可观察市场和预算下，宽范围随机候选配合可证伪的持有规则，可能保留比复杂初筛更多的上行贡献。",
+      "challenge": "反对者：随机广发现会让大量失败占用注意力与资金，持有规则可能无法弥补进入质量；它不因为大胆就值得实盘采用。",
+      "project_relation": "直接挑战A1默认先改进候选排序的资源投入，但复用A1校正底账，不重建资料库；与A1同步检验两环各自贡献，并不废除随机/趋势基线原有地位。",
+      "upside": "若成立可能改变研究重心，减少不断加指标却提前卖掉赢家的情况；若不成立则证明选币环节确有净价值。",
+      "data": "同一历史可观察币池、全量入选/未入选、可成交参考、完整价格路径、统一关注容量和共同资金情景；退市和缺失不能消失。",
+      "decision_time": "每个正常查询时刻固定随机种子抽样，或者现有规则挑选；持有规则只能看截至当时的后续证据。",
+      "availability": "抽样与规则均不能读未来标签；抽样种子在实验前锁定并全部报告，不能挑表现最好的随机路径。",
+      "baseline": "做2×2对照：现有筛选/宽范围随机 × 当前统一退出/候选机制退出；另加入简单趋势，严格相同N、费用、总风险情景。",
+      "experiment": "先用50个预固定随机种子回放有限且完整的两个历史区间，按所有种子的分布而不是最优一次评估；记录筛选主效应、退出主效应与交互，并留新时期冻结确认。",
+      "support": "退出改进在两种选币方式中都大于复杂筛选增量，且随机宽发现没有靠更大人工量或暴露占便宜；随后才讨论转移研发优先级。",
+      "refute": "随机组的失败与等待消耗持续抵消尾部贡献；或仅少数幸运种子胜出；或结果取决于无法执行的峰值退出。",
+      "failure_learning": "失败同样有价值：能给‘筛选还是持有更值得投精力’提供因果更清楚的对照，不再凭直觉争论。",
+      "evidence_ids": [
+        "AC02",
+        "AC04",
+        "AC15"
+      ],
+      "result_type": [
+        "A",
+        "B",
+        "D",
+        "E"
+      ],
+      "terms": [
+        "candidate_pool",
+        "control_group",
+        "backtest",
+        "overfit",
+        "equity_curve"
+      ]
+    }
+  ]
+}

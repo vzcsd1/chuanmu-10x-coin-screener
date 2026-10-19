@@ -1,0 +1,116 @@
+{
+  "model_tag": "gpt6astra",
+  "research_date": "2026-10-19",
+  "git_head": "739f30aafed7ce7fc277464e80f13f79debf2fbd",
+  "scope": "offline code defaults and saved rows, not runtime configuration or trading validation",
+  "config_defaults": {
+    "timeframe": "1h",
+    "lookback": 240,
+    "box_period": 24,
+    "min_quote_volume": 500000,
+    "max_quote_volume": 50000000,
+    "max_market_cap": 2000000000,
+    "max_symbols": 400,
+    "volume_multiplier": 1.5,
+    "ema_period": 50,
+    "atr_period": 14,
+    "stop_atr": 1.5,
+    "reward_risk": 2.0,
+    "risk_per_trade": 0.01,
+    "max_quote_per_trade": 100.0,
+    "poll_seconds": 300,
+    "min_score": 5,
+    "use_coingecko": true,
+    "timeout_ms": 30000,
+    "proxy": null,
+    "csv_dir": null,
+    "require_okx": true,
+    "require_futures": false,
+    "deriv_cache": true,
+    "rate_limit_state": null
+  },
+  "weights": {
+    "c_trend": 5,
+    "oi_chg_1d": 4,
+    "oi_chg_3d": 3,
+    "ls_top": 3,
+    "c_breakout": 2,
+    "c_v24up": 1
+  },
+  "saved_event_sample": {
+    "rows": 1402,
+    "positive": 822,
+    "controls": 580,
+    "positive_hit": 616,
+    "tenfold_events": 24,
+    "tenfold_hits": 17,
+    "positive_without_deriv": 541
+  },
+  "protected_files": [
+    {
+      "path": "binance_box_strategy.py",
+      "sha256": "d1cc20d875a991b87b476aba9736fba449a9bd9351a20b17d0be16aa5ea80826",
+      "bytes": 80104
+    },
+    {
+      "path": "ui/app.py",
+      "sha256": "362125698c494065a04b0f0abbd9b80fe0d915a5ceb8fa18e4efcb042ca11eec",
+      "bytes": 16660
+    },
+    {
+      "path": "research/02_detect_pumps.py",
+      "sha256": "3e56a93e91f414aa2c05b1824695ca15e9d7db9c29f0de79143f1d630dba4a17",
+      "bytes": 5288
+    },
+    {
+      "path": "research/03_build_features.py",
+      "sha256": "46d8adcb197abe0a324a66ec8fd939cee5c76497f8edda4cbe983b6825ee5f89",
+      "bytes": 11277
+    },
+    {
+      "path": "research/05_deriv_features.py",
+      "sha256": "87ef0cb9cf25daa3c6a1e7d27e183dd6bca6a844e4c5c34baccbd61f4f5ffe9a",
+      "bytes": 12035
+    },
+    {
+      "path": "research/07_oos_validate.py",
+      "sha256": "88b53412dbbf2e14196b5da19506c5a2b3563c54f3683d49cdb0f05f7d6abdef",
+      "bytes": 9432
+    },
+    {
+      "path": "research/08_audit_hindsight.py",
+      "sha256": "043cc8881d8c475495bf2a771b29fce3c1cd2efcc2020a5473e5c78fa25c3d43",
+      "bytes": 10490
+    },
+    {
+      "path": "research/09_backtest_revised.py",
+      "sha256": "4f07d9df943a4d562586a2523fec4a246c38211b27cc23fd0deef52f3a490489",
+      "bytes": 15413
+    },
+    {
+      "path": "research/11_hit_rate_current.py",
+      "sha256": "22f307194273dc68967e6b2b8da5453f3edc0a602783d2eb829c5011fbed3755",
+      "bytes": 10761
+    },
+    {
+      "path": "research/12_optimize_gate.py",
+      "sha256": "c7a3cb9c7dae3829f6a6e6d5288d1845cbc89adb1b051ec298ca93b9eda16acf",
+      "bytes": 7101
+    },
+    {
+      "path": "data/hit_rate_current.csv",
+      "sha256": "5c711a1e56898519130582f2c655012164674b897cbf831fbc1205a09b8f92fd",
+      "bytes": 664149
+    },
+    {
+      "path": "data/backtest_scores.csv",
+      "sha256": "3c941a1a0c2fdf85957cccbf8b80af1ba5c6bfcb16810af5c355a0198054ebf0",
+      "bytes": 486918
+    }
+  ],
+  "limits": [
+    "Case-enriched event sample is not market incidence or a trading win rate.",
+    "A1 r3 peer reviews are read as evidence, not newly rerun or finally accepted here.",
+    "No live service, market download, parameter change or account action is executed."
+  ]
+}

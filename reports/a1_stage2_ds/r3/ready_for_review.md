@@ -139,8 +139,13 @@ py -3.10 -B -u reports/a1_stage2_ds/r3/scripts/handoff_freeze_r3.py
 
 - ✅ **已通过**：M0（身份+去重）、M1-1（排序读未来）、M1-2（缺资料误计）、
   M1-3（H2 文字）、B6（身份对账）、M2 独立复验（复现 r2 全部反例）。
-- ❌ **未过（属 glm 待返修）**：glm M2 的 R5/R6/R7 仍成立，判定未通过。
-- ⏸ **待依赖**：M2 正式返修由 glm 依共用任务书 §4 进行；M3 需两包交叉验收合格后才续。
+- ✅ **glm 已复验本包 r3 通过**（见 `a1_stage2_glm53f/r3/m1_verification.md`）：
+  M1 三项、M0、B6 全部通过；并提了一条合理批评（未来探针缺逐符号证据），已补
+  `scripts/m1_future_probe_per_symbol.py`（77/77 与已闭合窗口一致）。
+- ✅ **本包已复验 glm r3 通过**：见 `reports/a1_stage2_ds/r3/review_of_glm_r3.md`。
+  结论：M2 阻塞项全过；订正一处事实（日线重复 4 条非 3 条，漏 ADAUSDT）；
+  提醒一处标签口径（`no_pullback_intraday` 54 个 True 中 44 个有 >10% 同根跌幅）。
+- ⏸ **待依赖**：M3 需主代理确认两包交叉合格后接续。
 
 ---
 
