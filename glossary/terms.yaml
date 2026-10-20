@@ -21,7 +21,7 @@
 #   - 不确定的结论不要写成结论，写进 caution 并注明"待验证"
 
 meta:
-  version: 7
+  version: 8
   updated: 2026-10-20
   note: 本文件是项目所有术语解释的唯一来源；任何文档需要术语解释时引用本文件，不要复制粘贴。
 
@@ -1032,3 +1032,48 @@ terms:
     analogy: 往汤里加盐。第一勺明显变咸，第五勺尝不出来了，第十勺开始齁——**加得越多不是越好，是过了拐点就变坏。**
     where: reports/bit_ceiling_ds/bits_curve.csv
     caution: 本项目实测拐点在 **k=12**，k=20 之后转负。**「再加几个指标」这个直觉在数据上是错的。**
+
+  - id: base_rate
+    zh: 基准率
+    en: base rate
+    cat: 方法论
+    plain: 在完全不筛选的情况下，随便挑一个币随便挑一天，它发生爆拉的概率。
+    analogy: 一个城市里"随便一个人中彩票"的概率，和你"专门挑了一堆买过彩票的人"之后的概率，是两回事。后者高，不是因为你眼光好。
+    where: research/19_base_rate.py；KNOWLEDGE §2.17
+    caution: 本项目实测 **0.1417%**（822 次 / 580,104 个符号-日，约每 706 个币-日 1 次）。现行策略的真实爆拉率 **0.245%**（基准的 1.7 倍）。**样本内 71% 是案例-对照结构造出来的，不能当真实概率。**
+
+  - id: event_definition
+    zh: 事件定义
+    en: event definition
+    cat: 基础概念
+    plain: 「什么算一次爆拉」的精确规则。定义不同，所有统计数字都会变。
+    analogy: 说"我们店一天卖出 1000 单"——是按订单算、按包裹算、还是按顾客算？换一种数法，数字立刻不一样。
+    where: research/02_detect_pumps.py
+    caution: 本项目定义：低点 = 峰前 60 天最低 `low`；峰值 = 30 日滚动涨幅局部新高；`gain = high[P]/low[T] − 1 ≥ 1.0`（即 2 倍）；启动日 = 低点后第一根 `close ≥ close[T]×1.15`。**不是「今天涨 5%」，不是「7 天翻倍」，窗口最长 60 天，用 `high` 所以插针也算。** 822 个事件里 45.9% 只是「刚够翻倍」的 2–3 倍档。
+
+  - id: static_vs_dynamic
+    zh: 静态 vs 动态
+    en: static vs dynamic
+    cat: 方法论
+    plain: 静态看「此刻是什么样」，动态看「最近在往哪个方向变、变多快」。
+    analogy: 体检报告 vs 体检报告 + 趋势图。前者告诉你今天多重，后者告诉你三个月涨了 20 斤——后者才是早期信号。
+    where: research/20_dynamic_score.py；KNOWLEDGE §2.18
+    caution: 本项目现行策略**基本是静态的**：18 分里 `c_trend`(5)+`c_breakout`(2)+`ls_top`(3)=8 分是纯状态量，其余 10 分是「一天的差」，没有一项看轨迹。但动态改造实测**没有增量**（4 折 −0.015），原因是分数有界——「在涨」有一大半是「本来就在高位」。
+
+  - id: score_trajectory
+    zh: 分数轨迹
+    en: score trajectory
+    cat: 方法论
+    plain: 把同一套评分在过去若干天每天算一遍，排成一条时间序列。
+    analogy: 不是拍一张照片，是拍一段延时摄影——能看出「正在发生什么」而不只是「现在是什么」。
+    where: research/20_dynamic_score.py；reports/dynamic_ds/features.csv
+    caution: 本项目用 16 天窗口、每天取 22:00 那根 1h K 线。**重算分与现行 `score` 100% 逐行相同**（决策点必须对齐到 22:00，H=20/21/23 只有 77–81% 一致）。
+
+  - id: bounded_score
+    zh: 有界分数陷阱
+    en: bounded score trap
+    cat: 风险
+    plain: 分数有上下限时，「涨了多少分」这个变化量天然和「现在多少分」高度相关，不是独立信息。
+    analogy: 一个身高 190 的人「一年长了 2cm」，和一个 150 的人「一年长了 10cm」——后者的「增长」数字更大，但你不能因此说后者更容易长高。
+    where: KNOWLEDGE §6.2 误区 11
+    caution: 分数是 0–18 的有界量，**「3 天涨 5 分」的前提是本来就在高位，18 分不可能再涨**。实测 `d_score_3` 与 `score` 的 Spearman **0.632**，属换皮。**单变量 AUC 0.65 ≠ 有增量信息**，必须把静态分放进同一个模型再比。
