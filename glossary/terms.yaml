@@ -21,7 +21,7 @@
 #   - 不确定的结论不要写成结论，写进 caution 并注明"待验证"
 
 meta:
-  version: 6
+  version: 7
   updated: 2026-10-20
   note: 本文件是项目所有术语解释的唯一来源；任何文档需要术语解释时引用本文件，不要复制粘贴。
 
@@ -994,3 +994,41 @@ terms:
     analogy: 橡皮筋拉得越长，回弹的概率越大。**已经在半山腰的，不适合当「即将启动」的候选。**
     where: data/vars_cache.parquet 的 `ema50_dist`；research/17_veto_gate.py 的 s5_not_ext / s5_not_ext75
     caution: 本项目实测：在现行池子上加一条「离均线不超过训练集 75 分位」，**池子从 63% 砍到 38%，7 日收益基本不变**（+0.5pp 中位、−0.2pp 均值），但爆拉率从 61.9% 降到 58.1%。**这是取舍，不是改进。**
+
+  # ===== 2026-10-20 补充（三）：A22 比特尺实验产生的新概念 =====
+
+  - id: bit_ceiling
+    zh: 比特尺
+    en: bit ceiling
+    cat: 方法论
+    plain: 把"预测得准不准"换算成"减少了多少不确定性"，单位是比特。用来判断"再加指标还有没有用"。
+    analogy: 你在猜一箱子里有几个球。已经知道"大概 10 个左右"，再给你 100 把尺子也没用——**你需要的是秤，不是第 101 把尺子。**
+    where: research/18_bit_ceiling.py；KNOWLEDGE §2.16
+    caution: 本项目实测：126 个变量只消除 **8.3%** 的不确定性（0.081 bit / 0.978 bit）。AUC 从 1 个变量到 111 个变量**不涨反跌**（0.672→0.617）。加到 20 个以上 bit 转负——**不是没信息，是概率校准崩了**（排序还有效，但报出来的数字不可信）。
+
+  - id: calibration
+    zh: 概率校准
+    en: calibration
+    cat: 方法论
+    plain: 模型说"70% 会爆"，实际是不是真有七成会爆。**排序准 ≠ 数字可信。**
+    analogy: 一个天气预报员判断"下不下雨"挺准，但他说"降水概率 99%"其实只对应 60%。你按 99% 去改行程，就被他的数字骗了。
+    where: research/18_bit_ceiling.py 的 bits 列
+    caution: 本项目从未做过校准审计（九模型共识 P1-1 提过，一直没做）。已知：变量加到 20 个以上，校准会崩到比"永远猜基准率"还差。
+
+  - id: reskin
+    zh: 换皮指标
+    en: reskin
+    cat: 风险
+    plain: 看起来是新指标，其实是已有条件的代数变形，信息完全重合。
+    analogy: 同一个演员换了个发型就说"这是新人"。
+    where: research_committee/变量清单_92机制可算性分级_20261020.md 的 M05
+    caution: **判法：和现有 6 个条件算 Spearman，> 0.5 基本就是换皮。** 实例：M05 `ls_top − ls_count` 与现有 `ls_top` 相关 **0.56**，AUC 0.416 vs 0.390——不是新发现。脑暴清单里这类"假新指标"占比很高。
+
+  - id: information_gain_curve
+    zh: 增量信息曲线
+    en: information gain curve
+    cat: 方法论
+    plain: 把变量按"有用程度"排序，一个一个加进去，看总信息量在第几个变量之后不再增长。
+    analogy: 往汤里加盐。第一勺明显变咸，第五勺尝不出来了，第十勺开始齁——**加得越多不是越好，是过了拐点就变坏。**
+    where: reports/bit_ceiling_ds/bits_curve.csv
+    caution: 本项目实测拐点在 **k=12**，k=20 之后转负。**「再加几个指标」这个直觉在数据上是错的。**
