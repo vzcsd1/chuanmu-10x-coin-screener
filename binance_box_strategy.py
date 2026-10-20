@@ -132,6 +132,15 @@ class Config:
     #   且**样本外精确率不降反升**（测试集 55.9% → 58.2%）。
     #   证据见 爆拉币命中率与优化空间.md、research/12_optimize_gate.py。
     min_score: int = 5
+    # —— 候选排序键（A16，2026-10-20）——
+    # 实测（research/14_variable_bench.py --rankkey，候选池 score>=5，四个时间分段样本外）：
+    #   score  ：池内 IC7 = −0.071 / −0.119 / −0.091 / −0.077，**0/4 为正**，已弃用。
+    #            即"分数最高的先看"等于每天主动挑出后面 7 天最差的那批。
+    #   volume ：0/4 为正，成交额不是质量代理，只代表已被看见。
+    #   taker  ：24h 主动买占比，IC7 4/4 为正，最高档跑赢全池中位数 4/4（+0.3~+10.2pp）。
+    #   none   ：按符号名排序，确定、可复现、不含信息。
+    # 详见 research_committee/变量试验台_首轮实测_20261020.md §四。
+    rank_key: str = "taker"
     use_coingecko: bool = True
     timeout_ms: int = 30_000
     proxy: str | None = None
@@ -236,6 +245,7 @@ def env_config() -> Config:
         max_quote_per_trade=number("MAX_QUOTE_PER_TRADE", 100, float),
         poll_seconds=number("POLL_SECONDS", 300, int),
         min_score=number("MIN_SCORE", defaults.min_score, int),
+        rank_key=(os.getenv("RANK_KEY") or defaults.rank_key).strip().lower(),
         use_coingecko=os.getenv("USE_COINGECKO", "true").lower() == "true",
         timeout_ms=number("REQUEST_TIMEOUT_MS", 30_000, int),
         proxy=resolve_proxy(),
@@ -1146,6 +1156,79 @@ def coingecko_caps(cfg: Config, cache_path: Path | None = None) -> dict[str, flo
     return caps
 
 
+def kline_taker_stats(rows: list[list[Any]], hours: int = 24) -> float | None:
+    """从原始 K 线算 24h 主动买占比（taker buy quote / quote volume）。
+
+    只有 12 列原始 K 线才有 taker 字段（列位 7=成交额、10=主动买成交额）；
+    6 列 OHLCV（ccxt fetch_ohlcv 口径）没有，返回 None。
+    这是 A16 的排序量：四个时间分段样本外 IC7 全为正，见 Config.rank_key 注释。
+    """
+    if not rows or len(rows[0]) < 11:
+        return None
+    tail = rows[-hours:]
+    quote = sum(_as_float(r[7], 0.0) for r in tail)
+    taker = sum(_as_float(r[10], 0.0) for r in tail)
+    if quote <= 0:
+        return None
+    return taker / quote
+
+
+def fetch_klines(exchange: ccxt.binance, guard: Any, symbol: str, cfg: Config) -> list[list[Any]]:
+    """取 K 线：优先 12 列原始口径（多带 taker 列），失败回退到 6 列 OHLCV。
+
+    同一个 /api/v3/klines 端点、同样一次请求，不增加调用次数；
+    回退只发生在端点不支持或返回异常时，此时 taker 排序量缺失、该行排到后面。
+    """
+    try:
+        raw = guard.run(SPOT_DOMAIN, exchange.publicGetKlines,
+                        {"symbol": symbol.replace("/", ""), "interval": cfg.timeframe,
+                         "limit": cfg.lookback})
+        if raw and len(raw[0]) >= 11:
+            return raw
+        logging.debug("raw klines for %s returned %s columns; falling back",
+                      symbol, len(raw[0]) if raw else 0)
+    except DomainPaused:
+        raise
+    except Exception as exc:  # noqa: BLE001
+        logging.debug("raw klines unavailable for %s: %s", symbol, exc)
+    return guard.run(SPOT_DOMAIN, exchange.fetch_ohlcv, symbol, cfg.timeframe, limit=cfg.lookback)
+
+
+RANK_KEYS = ("taker", "score", "volume", "none")
+
+
+def rank_rows(rows: list[dict[str, Any]], cfg: Config) -> list[dict[str, Any]]:
+    """候选排序（A16）。四种口径的实测依据见 Config.rank_key 注释。
+
+    `score` 保留只为复现历史结果：它在候选池内四个时间分段的 IC7 全为负，
+    即按它排序会把后面 7 天最差的标的排到最前面。
+    """
+    key = (cfg.rank_key or "none").strip().lower()
+    if key not in RANK_KEYS:
+        logging.warning("unknown RANK_KEY=%r; falling back to 'none'", cfg.rank_key)
+        key = "none"
+    if key == "score":
+        logging.warning("RANK_KEY=score 已实测为负贡献（池内 IC7 四个分段全为负），仅用于复现历史结果")
+        return sorted(rows, key=lambda x: (x["score"], x["futures_quote_volume"]), reverse=True)
+    if key == "volume":
+        return sorted(rows, key=lambda x: x["futures_quote_volume"], reverse=True)
+    if key == "taker":
+        def taker_of(row: dict[str, Any]) -> float:
+            value = row.get("taker_24h")
+            return float(value) if isinstance(value, (int, float)) and math.isfinite(value) else -1.0
+        return sorted(rows, key=lambda x: (taker_of(x), x["futures_quote_volume"]), reverse=True)
+    return sorted(rows, key=lambda x: x["symbol"])
+
+
+def rank_note(cfg: Config) -> str:
+    return {
+        "taker": "排序键 taker：24h 主动买占比（高→低）",
+        "volume": "排序键 volume：合约成交额（高→低）",
+        "score": "排序键 score：评分（高→低）—— 已实测为负贡献",
+        "none": "排序键 none：符号名（不含预测信息）",
+    }.get((cfg.rank_key or "none").strip().lower(), "排序键未知")
+
+
 def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: Config,
                      okx: ccxt.okx | None = None,
                      round_stats: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -1236,9 +1319,10 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
                 skipped_require_futures_symbols.append(symbol)
                 continue
             # 逐币 K 线是现货域请求：暂停时直接中止本轮（guard 不会触碰网络）
-            candles = guard.run(SPOT_DOMAIN, exchange.fetch_ohlcv,
-                                symbol, cfg.timeframe, limit=cfg.lookback)
-            df = indicators(candles, cfg)
+            # 优先取 12 列原始口径，多带 taker 列供排序；indicators 只吃前 6 列
+            candles = fetch_klines(exchange, guard, symbol, cfg)
+            taker_24h = kline_taker_stats(candles, 24)
+            df = indicators([c[:6] for c in candles], cfg)
             if len(df) < cfg.box_period + 3:
                 skipped_short_history += 1
                 skipped_short_history_symbols.append(symbol)
@@ -1340,6 +1424,7 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
                          "conditions_met": len(hit_conditions),
                          "conditions": ",".join(hit_conditions) or "无",
                          "market_cap": cap,
+                         "taker_24h": taker_24h,
                          "spot_quote_volume": quote_volume, "futures_quote_volume": futures_volume,
                          "okx_quote_volume": okx_volume, "volume_cap_ratio": volume_cap_ratio,
                          "open_interest_value": None, "oi_cap_ratio": None,
@@ -1362,7 +1447,7 @@ def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: 
             logging.exception("failed scoring %s", symbol)
     # 原先此处会给"24h 涨幅前十"的标的 +1 分。实测该项区分度 −0.0pp、提升倍数
     # 0.99x（纯噪音，详见文件头 WEIGHTS 上方说明），本质是奖励"已经涨过的币"，已删除。
-    ranked = sorted(rows, key=lambda x: (x["score"], x["futures_quote_volume"]), reverse=True)
+    ranked = rank_rows(rows, cfg)
     chosen = [x for x in ranked if x["score"] >= cfg.min_score]
     shown = chosen or ranked[:10]
     # —— 第二遍：OI 快照与资金费率只对展示行（过门槛，或无过门槛时的前 10）补取 ——
@@ -1518,6 +1603,10 @@ def render_table(rows: list[dict[str, Any]]) -> str:
         ("市场范围", "market_scope", "left", lambda r: r.get("market_scope", "-")),
         ("合约数据", "deriv_status", "left", deriv_status_label),
         ("评分", "score", "right", lambda r: f"{r['score']}/{r.get('max_score', MAX_SCORE)}"),
+        # 排序键（A16）：放在评分右边，让"入池看评分、排序看主买"一眼可见
+        ("主买24h", "taker_24h", "right",
+         lambda r: f"{r['taker_24h'] * 100:.1f}%"
+         if isinstance(r.get("taker_24h"), (int, float)) and math.isfinite(r["taker_24h"]) else "-"),
         ("辅助", "extra_score", "right", lambda r: str(r.get("extra_score", 0))),
         ("命中", "conditions_met", "right", lambda r: str(r.get("conditions_met", 0))),
         ("趋势", "c_trend", "left", lambda r: "是" if r.get("c_trend") else "-"),
@@ -1580,6 +1669,7 @@ def run_once(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config) -> list
         print(f"\n=== 无标的达到评分 {cfg.min_score}，显示评分最高的前 {len(shown)} 个 ===")
     if shown:
         print(render_table(shown))
+        print(f"\n{rank_note(cfg)}｜这是关注顺序，不是推荐强度")
         print("\n命中条件明细:")
         for item in shown:
             print(f"{item['symbol']}: 核心[{item.get('conditions', '无')}] "
@@ -1609,6 +1699,7 @@ def main() -> int:
         print("未检测到代理。若币安被墙，请设置 BINANCE_PROXY，例如 http://127.0.0.1:7897")
     print(f"参数: 周期={cfg.timeframe} 箱体={cfg.box_period} 扫描上限={cfg.max_symbols} "
           f"门槛={cfg.min_score} 市值源={'CoinGecko' if cfg.use_coingecko else '关闭'}")
+    print(f"排序键: {cfg.rank_key}（{'/'.join(RANK_KEYS)}，见 RANK_KEY 环境变量）")
     print(f"候选池闸门: 成交额 [{human_money(cfg.min_quote_volume)}, "
           f"{human_money(cfg.max_quote_volume)}]  市值 <= {human_money(cfg.max_market_cap)}")
     print("正在拉取行情，扫描期间会输出进度。\n")
