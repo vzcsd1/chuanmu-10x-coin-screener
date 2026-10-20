@@ -1,0 +1,1650 @@
+"""Binance public-data box/selection monitor.
+
+This version never places orders and needs no API key. It uses public Binance
+spot/futures endpoints and optionally CoinGecko's public market-cap endpoint.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import math
+import os
+import re
+import threading
+import time
+import traceback
+import unicodedata
+from dataclasses import dataclass
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+
+import ccxt
+import pandas as pd
+import requests
+
+
+# Pegged assets quoted in USDT: excluded from scanning, not from market-cap lookups.
+STABLECOINS = frozenset({
+    "USDC", "FDUSD", "TUSD", "BUSD", "DAI", "USDP", "EURI", "AEUR",
+    "PYUSD", "USD1", "USDE", "USDS", "XUSD",
+})
+
+
+# ---------------------------------------------------------------------------
+# 评分权重 —— 单一真源
+#
+# 权重不是拍脑袋定的，来自对 841 个历史爆拉事件的实测：
+#   research/08_audit_hindsight.py  给出每个条件的事前区分度
+#                                  （爆拉组命中率 − 对照组命中率，单位 pp）
+#   research/07_oos_validate.py     给出时间切分样本外检验（训练 <2025-01-01）
+#
+# 入选（区分度为正且样本外方向稳定）：
+#   收盘 > EMA50       +35.3pp  样本外 +34.3/+27.5  -> 5
+#   OI 1 日增 > 10%    +12.6pp  提升 1.57x          -> 4
+#   OI 3 日增 > 20%    + 8.9pp  提升 1.47x          -> 3
+#   大户持仓多空比 < 1  + 8.0pp  提升 1.38x          -> 3
+#   已突破箱体         + 5.7pp  提升 1.33x          -> 2
+#   24h 量增           + 8.9pp  样本外稳定          -> 1
+#
+# 移出评分、仅作展示（实测为噪音，或样本外方向翻转）：
+#   箱体宽 <=12% (+0.1pp) / 量比 >=1.5 (0.0pp) / 量能三台阶 (+2.6pp)
+#   4h 量增 (+2.2pp) / 箱体持续 >=72h (训练 +11.7 → 测试 −10.6) / 资金费率 >=0 (翻转)
+#   多空比 3 日下降 —— 原用"全市场账户比"测得 +7.7pp，但把口径对齐实盘
+#   （大户持仓比）后只剩 +1.5pp，属噪音，故移出评分（见 research/05b_patch_ls_top_chg.py）
+#
+# 直接删除（实测为噪音）：
+#   涨幅前十 加分项 (−0.0pp，提升 0.99x)
+#     注：早前报告记为 −19.3pp「比随机还差」，那是错误数字。当时在**样本内**做
+#     横截面排名，而样本每天中位仅 1 行（98.3% 的天数 ≤10 行），rank<=10 恒为真、
+#     条件退化。按全市场重算后为纯噪音。删除它是对的，理由是「无信息」而非「反向」。
+#     修复见 research/08_audit_hindsight.py 的 market_daily_returns()/market_rank_1d()
+#   48h 波动 15–25% (+1.0pp)
+#
+# research/09_backtest_revised.py 直接 import 本常量做反向回测，确保
+# 回测口径与实盘口径永远一致；改权重只需改这一处。
+# ---------------------------------------------------------------------------
+WEIGHTS: dict[str, int] = {
+    "c_trend": 5,       # 收盘 > EMA50（趋势）
+    "oi_chg_1d": 4,     # OI 1 日增速 > 10%
+    "oi_chg_3d": 3,     # OI 3 日增速 > 20%
+    "ls_top": 3,        # 大户持仓多空比 < 1（空头拥挤）
+    "c_breakout": 2,    # 已突破箱体上沿
+    "c_v24up": 1,       # 24h 成交量高于前 24h
+}
+MAX_SCORE = sum(WEIGHTS.values())
+
+# 触发阈值（与 research 脚本保持一致）
+OI_1D_THRESHOLD = 0.10
+OI_3D_THRESHOLD = 0.20
+LS_TOP_THRESHOLD = 1.0
+
+
+def _as_float(value: Any, default: float = 0.0) -> float:
+    """Convert exchange fields safely; malformed or non-finite values become zero."""
+    try:
+        converted = float(value)
+    except (TypeError, ValueError):
+        return default
+    return converted if math.isfinite(converted) else default
+
+
+@dataclass(frozen=True)
+class Config:
+    timeframe: str = "1h"
+    lookback: int = 240
+    box_period: int = 24
+    # —— 候选池闸门 ——
+    # 下限：只保证基本可交易。实测最低成交额档（中位 0.28M）爆拉率 46.2%，
+    #   明显低于其余档（~60%），所以留一个下限，但不必设高。
+    min_quote_volume: float = 500_000
+    # 上限：成交额是市值的代理（log 相关 +0.738），成交额越大 = 市值越大 =
+    #   越不可能十倍。19 个历史十倍币启动前成交额最大仅 14.87M；上限设 50M
+    #   只漏 2.7% 的爆拉币、0% 的十倍币。
+    max_quote_volume: float = 50_000_000
+    # 市值硬闸门：即使按最保守的换手率（1%）反推，最大的十倍币启动时也只有
+    #   约 1.5B 市值，2B 是安全上限。它能一次排除 BTC(1.71T)/ETH/SOL 等
+    #   结构性不可能十倍的标的。CoinGecko 取不到市值时不拦（fail-open）。
+    max_market_cap: float = 2_000_000_000
+    max_symbols: int = 400
+    volume_multiplier: float = 1.5
+    ema_period: int = 50
+    atr_period: int = 14
+    stop_atr: float = 1.5
+    reward_risk: float = 2.0
+    risk_per_trade: float = 0.01
+    max_quote_per_trade: float = 100.0
+    poll_seconds: int = 300
+    # 门槛 = 5（满分 18）。
+    #   含义：至少凑够 5 分才能进候选池。**注意：不是"至少趋势成立"**——趋势=5 虽是
+    #   单项最高分，但评分是各项**相加**：oi_chg_1d(4) + c_v24up(1) = 5 也能达标，
+    #   无需趋势；门槛=4 时 oi_chg_1d(4) 更能单独达标。所以 5 是**当前设计选择**，
+    #   不是数学下限（调低属策略决策，需重新验证）。
+    #   为什么从 6 降到 5：K 线侧满分仅 8、单项最高是趋势=5，门槛=6 时"只有趋势"
+    #   的币单靠 K 线永远进不了池，而 822 个爆拉币里 65.8% 没有合约数据可补分。
+    #   K线=5 这一档**携带正信息**：历史爆拉率 68.0%，高于基准 58.6%
+    #   （K线 0–4 各档只有 29–34%），所以放宽不是"退化成不筛选"。
+    #   早前担心"会放进 BTC"的真正原因是没有候选池闸门；加上成交额/市值上限后，
+    #   BTC 这类已被结构性排除，与门槛无关。
+    #   6→5 实测：命中率 48.1% → 74.9%，10x+ 命中 9/19 → 15/19，
+    #   且**样本外精确率不降反升**（测试集 55.9% → 58.2%）。
+    #   证据见 爆拉币命中率与优化空间.md、research/12_optimize_gate.py。
+    min_score: int = 5
+    use_coingecko: bool = True
+    timeout_ms: int = 30_000
+    proxy: str | None = None
+    csv_dir: str | None = None
+    require_okx: bool = True
+    require_futures: bool = False
+    # —— 请求治理（2026-10-05，P0/P1）——
+    # deriv_cache：OI 增速 / 多空比是 1h 粒度数据，一小时才变一次；按小时对齐缓存后，
+    #   300s 轮询下同一小时只拉一次（按当前代码结构估算：合约数据请求 9,600 次/小时 → ~800 次/小时），
+    #   代价是数据最多滞后到整点后第一轮取到的样子。DERIV_CACHE=false 可关闭。
+    # rate_limit_state：分域限流暂停状态文件，跨重启、同机多进程共享；为空时跟随 csv_dir
+    #   （results/rate_limit_state.json），csv_dir 也为空则仅内存（测试用）。
+    deriv_cache: bool = True
+    rate_limit_state: str | None = None
+
+
+def registry_proxy() -> str | None:
+    """Read the Windows system proxy (WinINET) as a fallback.
+
+    Double-clicking a launcher gives no inherited HTTP_PROXY, but Clash-style
+    clients do register a system proxy here, so this keeps the scanner working
+    outside a preconfigured shell.
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+    except ImportError:
+        return None
+    try:
+        with winreg.OpenKey(
+            winreg.HKEY_CURRENT_USER,
+            r"Software\Microsoft\Windows\CurrentVersion\Internet Settings",
+        ) as key:
+            if not winreg.QueryValueEx(key, "ProxyEnable")[0]:
+                return None
+            server = str(winreg.QueryValueEx(key, "ProxyServer")[0]).strip()
+    except OSError:
+        return None
+    if not server:
+        return None
+    # ProxyServer is either "host:port" or "http=host:port;https=host:port".
+    if "=" in server:
+        mapping = {}
+        for part in server.split(";"):
+            if "=" in part:
+                scheme, _, address = part.partition("=")
+                mapping[scheme.strip().lower()] = address.strip()
+        server = mapping.get("https") or mapping.get("http") or ""
+        if not server:
+            return None
+    if "://" not in server:
+        server = f"http://{server}"
+    return server
+
+
+def resolve_proxy() -> str | None:
+    """Pick a proxy URL from the environment, then the Windows system proxy.
+
+    ccxt builds its own requests.Session with trust_env=False, so the usual
+    HTTP_PROXY/HTTPS_PROXY variables are ignored unless we pass them in
+    explicitly. BINANCE_PROXY wins so the scanner can be pointed elsewhere
+    without touching the shell-wide proxy.
+    """
+    if (os.getenv("BINANCE_NO_PROXY") or "").strip().lower() in ("1", "true", "yes"):
+        return None
+    for name in ("BINANCE_PROXY", "HTTPS_PROXY", "https_proxy",
+                 "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy"):
+        value = (os.getenv(name) or "").strip()
+        if value:
+            return value
+    return registry_proxy()
+
+
+def env_config() -> Config:
+    defaults = Config()
+
+    def number(name: str, default: Any, cast):
+        raw = os.getenv(name)
+        if raw is None or not str(raw).strip():
+            return cast(default)
+        try:
+            return cast(raw)
+        except (TypeError, ValueError):
+            logging.warning("invalid %s=%r; using %r", name, raw, default)
+            return cast(default)
+
+    return Config(
+        timeframe=os.getenv("BINANCE_TIMEFRAME", "1h"),
+        lookback=number("LOOKBACK", 240, int),
+        box_period=number("BOX_PERIOD", 24, int),
+        min_quote_volume=number("MIN_QUOTE_VOLUME", defaults.min_quote_volume, float),
+        max_quote_volume=number("MAX_QUOTE_VOLUME", defaults.max_quote_volume, float),
+        max_market_cap=number("MAX_MARKET_CAP", defaults.max_market_cap, float),
+        max_symbols=number("MAX_SYMBOLS", defaults.max_symbols, int),
+        volume_multiplier=number("VOLUME_MULTIPLIER", 1.5, float),
+        ema_period=number("EMA_PERIOD", 50, int),
+        atr_period=number("ATR_PERIOD", 14, int),
+        stop_atr=number("STOP_ATR", 1.5, float),
+        reward_risk=number("REWARD_RISK", 2.0, float),
+        risk_per_trade=number("RISK_PER_TRADE", 0.01, float),
+        max_quote_per_trade=number("MAX_QUOTE_PER_TRADE", 100, float),
+        poll_seconds=number("POLL_SECONDS", 300, int),
+        min_score=number("MIN_SCORE", defaults.min_score, int),
+        use_coingecko=os.getenv("USE_COINGECKO", "true").lower() == "true",
+        timeout_ms=number("REQUEST_TIMEOUT_MS", 30_000, int),
+        proxy=resolve_proxy(),
+        csv_dir=os.getenv("CSV_DIR") or str(Path(__file__).resolve().parent / "results"),
+        require_okx=os.getenv("REQUIRE_OKX", "true").lower() == "true",
+        require_futures=os.getenv("REQUIRE_FUTURES", "false").lower() == "true",
+        deriv_cache=os.getenv("DERIV_CACHE", "true").lower() == "true",
+        rate_limit_state=os.getenv("RATE_LIMIT_STATE_FILE") or None,
+    )
+
+
+def requests_proxies(cfg: Config) -> dict[str, str] | None:
+    if not cfg.proxy:
+        return None
+    return {"http": cfg.proxy, "https": cfg.proxy}
+
+
+def apply_proxy(exchange: ccxt.binance, cfg: Config) -> ccxt.binance:
+    """Route ccxt through the configured proxy.
+
+    ccxt rejects setting more than one proxy attribute at a time, so only the
+    field matching the URL scheme is assigned.
+    """
+    if not cfg.proxy:
+        return exchange
+    if cfg.proxy.lower().startswith("socks"):
+        exchange.socksProxy = cfg.proxy
+    else:
+        exchange.httpsProxy = cfg.proxy
+    return exchange
+
+
+def build_exchange(cfg: Config, default_type: str) -> ccxt.binance:
+    # Public endpoints only: no credentials are read or required.
+    # fetchMarkets 按域收窄（2026-10-05）：ccxt 默认 spot/linear/inverse 全加载，
+    # 现货客户端初始化也会去请求合约域名——合约被封时现货会被连带拖死。
+    # 现货只加载现货市场；合约客户端只加载项目用到的 U 本位线性合约。
+    markets_by_type = {"spot": ["spot"], "future": ["linear"]}
+    exchange = ccxt.binance({
+        "enableRateLimit": True,
+        "timeout": cfg.timeout_ms,
+        "options": {"defaultType": default_type,
+                    "fetchMarkets": markets_by_type.get(default_type, ["spot", "linear", "inverse"])},
+    })
+    return apply_proxy(exchange, cfg)
+
+
+# ---------------------------------------------------------------------------
+# 请求治理（2026-10-05，P1：限流退让与恢复）
+#
+# 币安的 429 累计会升级为 418 IP 封禁，封禁响应体带 "banned until <毫秒时间戳>"。
+# 按固定间隔盲目重试会撞墙升级、把短封拖成长封，因此：
+#   - 收到限流/封禁：解析恢复时间，写入状态文件（分域 + 分出口，跨重启共享）
+#   - 暂停期间：该域直接跳过请求，不再触碰网络
+#   - 到期后：只发一次恢复探测；失败进入冷却，等待下一轮
+#   - 恢复成功：清除暂停状态
+# 恢复时间解析不到时按保守默认退让并在日志写明；状态文件损坏按无暂停处理（fail-open）。
+# 术语见 LEARNING.md「限流退让」；设计取舍见 REASONING.md C4。
+# ---------------------------------------------------------------------------
+SPOT_DOMAIN = "spot"      # api.binance.com
+FUTURES_DOMAIN = "futures"  # fapi.binance.com + /futures/data/*
+DEFAULT_BAN_BACKOFF_MS = 15 * 60_000  # 解析不到恢复时间时的保守退让
+PROBE_COOLDOWN_MS = 5 * 60_000        # 恢复探测失败后的最短等待
+
+_BAN_TS_RE = re.compile(r"banned until[^\d]*(\d{10,13})", re.IGNORECASE)
+_RETRY_AFTER_RE = re.compile(r"retry[-_ ]?after\D{0,5}(\d{1,6})", re.IGNORECASE)
+_LIMIT_ERRORS = (ccxt.RateLimitExceeded, ccxt.DDoSProtection)
+
+
+def _now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def human_ts(ms: float | None) -> str:
+    if not ms:
+        return "-"
+    return datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def parse_ban_until(message: Any) -> int:
+    """从限流/封禁响应里解析恢复时间（毫秒）；解析不到返回 0。"""
+    text = str(message or "")
+    match = _BAN_TS_RE.search(text)
+    if match:
+        ts = int(match.group(1))
+        return ts * 1000 if ts < 10**12 else ts
+    match = _RETRY_AFTER_RE.search(text)
+    if match:
+        return _now_ms() + int(match.group(1)) * 1000
+    return 0
+
+
+def _lock_fh(fh) -> None:
+    """对已打开的文件句柄加排他锁（阻塞式）。"""
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_LOCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_EX)
+
+
+def _unlock_fh(fh) -> None:
+    if os.name == "nt":
+        import msvcrt
+        fh.seek(0)
+        msvcrt.locking(fh.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+        fcntl.flock(fh.fileno(), fcntl.LOCK_UN)
+
+
+class _StateLock:
+    """跨进程互斥：把状态文件的「读—查—改—写」保护成一个不可插入的动作。
+
+    两层锁：
+      · 进程内 —— 按状态文件路径共享的 `threading.RLock`，让**同一进程内的不同实例**
+        也互斥（不能只靠 OS 文件锁，Windows 的字节区间锁语义在同进程多句柄下不可靠）。
+      · 跨进程 —— 旁路锁文件 + 操作系统文件锁（Windows `msvcrt.locking` /
+        POSIX `fcntl.flock`）。选它而不是 `O_CREAT|O_EXCL`，是因为内核会在进程崩溃时
+        自动释放锁，不会留下陈旧锁。
+
+    **可重入**：用线程本地计数记录本线程已持有的路径。同一线程再次进入同一路径时只加
+    计数、不重复申请锁，因此"锁内再调另一个会加锁的方法"不会自锁死。
+    `path` 为 None（内存模式/测试）时是 no-op。
+    """
+
+    _path_locks: dict[str, threading.RLock] = {}
+    _registry_guard = threading.Lock()
+    _held = threading.local()
+
+    def __init__(self, path, timeout: float = 20.0):
+        self._path = Path(str(path) + ".lock") if path else None
+        self._key = str(self._path.resolve()).lower() if self._path else None
+        self._timeout = timeout
+        self._fh = None
+        self._rlock = None
+        self._reentrant = False
+
+    @classmethod
+    def _held_map(cls) -> dict:
+        m = getattr(cls._held, "paths", None)
+        if m is None:
+            m = {}
+            cls._held.paths = m
+        return m
+
+    @classmethod
+    def _thread_lock(cls, key: str) -> threading.RLock:
+        with cls._registry_guard:
+            lock = cls._path_locks.get(key)
+            if lock is None:
+                lock = threading.RLock()
+                cls._path_locks[key] = lock
+            return lock
+
+    def __enter__(self):
+        if self._path is None:
+            return self
+        held = self._held_map()
+        if held.get(self._key):
+            # 本线程已持有该路径：只加计数，避免重复申请 OS 锁造成自锁死
+            held[self._key] = held[self._key] + 1
+            self._reentrant = True
+            return self
+        self._rlock = self._thread_lock(self._key)
+        self._rlock.acquire()
+        try:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            self._fh = open(self._path, "a+b")
+            deadline = time.monotonic() + self._timeout
+            while True:
+                try:
+                    _lock_fh(self._fh)
+                    break
+                except OSError:
+                    if time.monotonic() >= deadline:
+                        raise
+                    time.sleep(0.02)
+        except BaseException:
+            if self._fh is not None:
+                self._fh.close()
+                self._fh = None
+            self._rlock.release()
+            self._rlock = None
+            raise
+        held[self._key] = 1
+        self._reentrant = False
+        return self
+
+    def __exit__(self, *exc):
+        if self._key is None:
+            return False
+        held = self._held_map()
+        if self._reentrant:
+            depth = held.get(self._key, 1) - 1
+            if depth > 0:
+                held[self._key] = depth
+            else:
+                held.pop(self._key, None)
+            self._reentrant = False
+            return False
+        if self._fh is not None:
+            try:
+                _unlock_fh(self._fh)
+            finally:
+                self._fh.close()
+                self._fh = None
+        held.pop(self._key, None)
+        if self._rlock is not None:
+            self._rlock.release()
+            self._rlock = None
+        return False
+
+
+def _sleep_interruptible(seconds: float, step: float = 1.0) -> None:
+    """分段睡眠：让 Ctrl+C / 外部中断在 1 秒内生效，而不是卡满整个等待。"""
+    end = time.monotonic() + max(0.0, seconds)
+    while True:
+        remain = end - time.monotonic()
+        if remain <= 0:
+            return
+        time.sleep(min(step, remain))
+
+
+class RateLimitState:
+    """分域限流暂停状态：JSON 落盘、每次判断前重读，同机多进程共享同一份。
+
+    键是「域|出口」——代理出口和直连是不同 IP，被封的只是其中一个，不能互相牵连。
+    """
+
+    def __init__(self, path: str | os.PathLike | None):
+        self.path = Path(path) if path else None
+        self.domains: dict[str, dict[str, Any]] = {}
+        # /futures/data/* 滑动窗口：出口标识 -> 窗口内请求时间戳（毫秒）。
+        # 用滑动窗口而非固定窗口，是为了在任意连续 5 分钟窗口内都不超预算
+        # （固定窗口在边界处允许双突发）。
+        self.data_quota: dict[str, list[int]] = {}
+
+    @classmethod
+    def load(cls, path: str | os.PathLike | None) -> "RateLimitState":
+        state = cls(path)
+        if state.path is None:
+            return state
+        try:
+            if state.path.exists():
+                raw = json.loads(state.path.read_text(encoding="utf-8"))
+                for key, item in (raw.get("domains") or {}).items():
+                    state.domains[key] = {
+                        "banned_until_ms": int(item.get("banned_until_ms") or 0),
+                        "probe_at_ms": int(item.get("probe_at_ms") or 0),
+                        "paused_since_ms": int(item.get("paused_since_ms") or 0),
+                        "reason": str(item.get("reason") or "")[:200],
+                    }
+                quota = raw.get("data_quota")
+                if isinstance(quota, dict):
+                    state.data_quota = {
+                        str(egress): [int(t) for t in hits]
+                        for egress, hits in quota.items() if isinstance(hits, list)
+                    }
+        except Exception:
+            logging.warning("限流状态文件 %s 无法读取，按无暂停处理（fail-open）",
+                            state.path, exc_info=True)
+            state.domains = {}
+        return state
+
+    def reload(self) -> None:
+        """吸收同机其它进程的写入（暂停表与额度窗口一起同步）；无文件时是空操作。"""
+        if self.path is None:
+            return
+        fresh = RateLimitState.load(self.path)
+        self.domains = fresh.domains
+        self.data_quota = fresh.data_quota
+
+    def save(self) -> None:
+        """把当前内存快照整表写盘（加锁；原子替换）。
+
+        ⚠️ 这是**底层写**：它不合并磁盘上的其它实例改动。并发场景请改用语义方法
+        （`record_pause` / `mark_probe` / `clear` / `clear_if_expired` /
+        `reserve_data_request`）——它们会在锁内**重新读取、合并、再写**，
+        不会用旧副本覆盖别人刚登记的新暂停或额度。`save()` 只用于播种/单实例收尾。
+        """
+        with self.locked():
+            self._write_locked()
+
+    def _write_locked(self) -> None:
+        """在**已持锁**的前提下写盘（内部使用，勿在锁外直接调用）。"""
+        if self.path is None:
+            return
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            payload = {"domains": self.domains, "data_quota": self.data_quota}
+            tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=1),
+                           encoding="utf-8")
+            tmp.replace(self.path)
+        except Exception:
+            logging.warning("限流状态文件写入失败 %s", self.path, exc_info=True)
+
+    def should_attempt(self, key: str, now: int | None = None) -> bool:
+        now = _now_ms() if now is None else now
+        self.reload()
+        item = self.domains.get(key)
+        if not item:
+            return True
+        until = item.get("banned_until_ms", 0)
+        if until and now < until:
+            return False
+        probe_at = item.get("probe_at_ms", 0)
+        if probe_at and probe_at >= item.get("paused_since_ms", 0) \
+                and now < probe_at + PROBE_COOLDOWN_MS:
+            # 本次暂停窗口内已探测过：无论成败先冷却，避免多进程同时轰炸
+            return False
+        return True
+
+    def until(self, key: str) -> int:
+        return int((self.domains.get(key) or {}).get("banned_until_ms", 0))
+
+    def record_pause(self, key: str, until_ms: int, reason: str, now: int | None = None) -> None:
+        """登记一次暂停。锁内**重读磁盘最新**后按"期限只延长不缩短"合并，再写回。
+
+        只在旧副本上 `max` 再整表保存，会把另一个实例刚登记的更晚暂停覆盖掉——
+        所以必须先把磁盘快照读进来，再和本次期限取最晚。
+        """
+        now = _now_ms() if now is None else now
+        until = int(until_ms) if until_ms and until_ms > now else now + DEFAULT_BAN_BACKOFF_MS
+        note = str(reason or "")[:200]
+        if not (until_ms and until_ms > now):
+            note = f"未解析到恢复时间，暂按 {DEFAULT_BAN_BACKOFF_MS // 60_000} 分钟退让；{note}"
+        with self.locked():
+            self.reload()
+            item = self.domains.setdefault(key, {})
+            # 期限只延长不缩短：同一域已有更晚的暂停时，短暂停不得把它提前放行
+            # （否则一次晚到的短 Retry-After 会让本应继续等待的出口提前重试）。
+            previous = int(item.get("banned_until_ms") or 0)
+            effective = max(previous, until)
+            item.update({"banned_until_ms": effective,
+                         "paused_since_ms": item.get("paused_since_ms") or now,
+                         "probe_at_ms": 0, "reason": note})
+            self._write_locked()
+        logging.warning("%s 被限流/封禁：暂停至 %s（%s）", key, human_ts(effective), note)
+
+    def mark_probe(self, key: str, now: int | None = None) -> None:
+        """登记一次恢复探测（锁内重读后只更新 probe 字段，不动别人的暂停期限）。"""
+        now = _now_ms() if now is None else now
+        with self.locked():
+            self.reload()
+            item = self.domains.setdefault(key, {})
+            item.setdefault("paused_since_ms", now)
+            item["probe_at_ms"] = now
+            self._write_locked()
+
+    def clear(self, key: str) -> None:
+        """无条件清除（兼容保留）。锁内重读后按磁盘最新状态删除。"""
+        with self.locked():
+            self.reload()
+            if key in self.domains:
+                del self.domains[key]
+                self._write_locked()
+
+    def clear_if_expired(self, key: str, now: int | None = None) -> bool:
+        """只在暂停**已到期**时清除该域。
+
+        晚到的成功只能证明"自己那次请求通了"，不能证明等待期间由其他请求或
+        其他进程登记的新暂停也解除了——所以判定必须基于**磁盘上的最新期限**，
+        而不是本实例内存里的旧副本；未到期的暂停一律不动、不写盘。
+        """
+        now = _now_ms() if now is None else now
+        with self.locked():
+            self.reload()
+            item = self.domains.get(key)
+            if not item:
+                return False
+            until = int(item.get("banned_until_ms") or 0)
+            if until and now < until:
+                return False
+            del self.domains[key]
+            self._write_locked()
+            return True
+
+    def locked(self):
+        """跨进程 + 跨实例互斥（可重入）；无路径时为 no-op。"""
+        return _StateLock(self.path)
+
+    def data_quota_delay_ms(self, egress: str, now: int | None = None) -> int:
+        """该出口 /futures/data/* 需要等待的毫秒数（0 = 可立即请求）。
+
+        用**滑动窗口**：只统计最近 DATA_QUOTA_WINDOW_MS 内的请求时间戳，
+        因此任意连续 5 分钟窗口内都不会超过 DATA_QUOTA_LIMIT——固定窗口在
+        边界处允许"两次各发满"的缺陷由此消除。
+        官方只写 "IP rate limit 1000 requests/5min"，未明确窗口类型与是否跨端点
+        共享；本实现按**更保守**的滑动窗口执行，并把本地预算压到官方额度的 60%。
+        """
+        now = _now_ms() if now is None else now
+        cutoff = now - DATA_QUOTA_WINDOW_MS
+        hits = [t for t in (self.data_quota.get(egress) or []) if t > cutoff]
+        if len(hits) < DATA_QUOTA_LIMIT:
+            return 0
+        return hits[0] + DATA_QUOTA_WINDOW_MS - now
+
+    def note_data_request(self, egress: str, now: int | None = None) -> None:
+        """登记一次 /futures/data/* 请求（仅内存；落盘请用 reserve_data_request）。"""
+        now = _now_ms() if now is None else now
+        cutoff = now - DATA_QUOTA_WINDOW_MS
+        hits = [t for t in (self.data_quota.get(egress) or []) if t > cutoff]
+        hits.append(now)
+        self.data_quota[egress] = hits
+
+    def reserve_data_request(self, egress: str, now: int | None = None) -> int:
+        """检查额度并**预约**一次请求：0 = 已预约并已落盘；>0 = 需要等待的毫秒。
+
+        整个「读—查—预约—保存」在**跨进程锁内**完成，且先 `reload()` 吸收其它
+        实例/进程刚登记的额度，再判断——否则两个实例会各自基于旧快照放行（丢失更新）。
+        只加 Python 内存锁、或各自整表写 JSON，都不算跨进程正确。
+        """
+        now = _now_ms() if now is None else now
+        with self.locked():
+            self.reload()
+            delay = self.data_quota_delay_ms(egress, now)
+            if delay > 0:
+                return delay
+            self.note_data_request(egress, now)
+            self._write_locked()
+            return 0
+
+
+class DomainPaused(Exception):
+    """域处于限流暂停期：调用方应把数据记为缺失，而不是报错中断。"""
+
+
+class RequestGuard:
+    """按「域+出口」治理请求：暂停期内直接拒绝，封禁时登记，恢复探测只发一次。"""
+
+    def __init__(self, state: RateLimitState, cfg: Config):
+        self.state = state
+        self.cfg = cfg
+
+    def key(self, domain: str) -> str:
+        return f"{domain}|{self.cfg.proxy or 'direct'}"
+
+    def run(self, domain: str, fn, *args, **kwargs):
+        key = self.key(domain)
+        if not self.state.should_attempt(key):
+            raise DomainPaused(f"{key} 限流暂停中（至 {human_ts(self.state.until(key))}）")
+        entry = self.state.domains.get(key)
+        if entry and entry.get("banned_until_ms"):
+            self.state.mark_probe(key)  # 到期后的第一次调用就是恢复探测
+        try:
+            result = fn(*args, **kwargs)
+        except _LIMIT_ERRORS as exc:
+            self.state.record_pause(key, parse_ban_until(exc), f"{type(exc).__name__}: {exc}")
+            raise
+        # 晚到的成功只证明"自己这次通了"：若等待期间其他请求/进程登记了更晚的
+        # 暂停，这里绝不能顺手抹掉——只在暂停**确已到期**时才清除。
+        self.state.clear_if_expired(key)
+        return result
+
+
+def default_state_path(cfg: Config) -> str | os.PathLike | None:
+    if cfg.rate_limit_state:
+        return cfg.rate_limit_state
+    if cfg.csv_dir:
+        return Path(cfg.csv_dir) / "rate_limit_state.json"
+    return None
+
+
+def connect_exchanges(cfg: Config, attempts: int = 3) -> tuple[ccxt.binance, ccxt.binance | None, Config]:
+    """分别连接现货与合约两个域：合约失败降级为 None，不再拖垮整个扫描。
+
+    现货是必需域（失败则整体抛错）；合约是可选域——封禁/连接失败时返回 None，
+    扫描按仅现货模式继续，合约三项记为缺失并标注。封禁时按域登记暂停，
+    不再对同一出口盲目重试；网络类错误仍做有限次重试。
+    """
+    state = RateLimitState.load(default_state_path(cfg))
+    spot, spot_cfg = _connect_domain(SPOT_DOMAIN, "spot", cfg, attempts, state, required=True)
+    futures, _ = _connect_domain(FUTURES_DOMAIN, "future", cfg, attempts, state, required=False)
+    return spot, futures, spot_cfg
+
+
+def _connect_domain(domain: str, default_type: str, cfg: Config, attempts: int,
+                    state: RateLimitState, required: bool):
+    from dataclasses import replace
+    configs = [cfg] + ([replace(cfg, proxy=None)] if cfg.proxy else [])
+    last_error: Exception | None = None
+    for candidate in configs:
+        mode = f"代理 {candidate.proxy}" if candidate.proxy else "直连"
+        guard = RequestGuard(state, candidate)
+        key = guard.key(domain)
+        banned = False
+        for attempt in range(1, attempts + 1):
+            if not state.should_attempt(key):
+                logging.error("%s 在 %s 出口处于限流暂停期（至 %s），跳过连接",
+                              domain, mode, human_ts(state.until(key)))
+                last_error = last_error or DomainPaused(
+                    f"{key} 限流暂停中（至 {human_ts(state.until(key))}）")
+                break
+            try:
+                print(f"连接币安 {domain}（{mode}，第 {attempt}/{attempts} 次）...")
+                exchange = build_exchange(candidate, default_type)
+                exchange.load_markets()
+                # 同理：连接成功不代表别的进程刚登记的暂停已解除，只清已到期的。
+                state.clear_if_expired(key)
+                return exchange, candidate
+            except _LIMIT_ERRORS as exc:
+                last_error = exc
+                state.record_pause(key, parse_ban_until(exc), f"{type(exc).__name__}: {exc}")
+                logging.error("%s 在 %s 出口被封禁，停止对该出口重试，且不切换出口",
+                              domain, mode)
+                banned = True
+                break
+            except Exception as exc:
+                last_error = exc
+                logging.warning("连接失败 %s (%d/%d): %s", mode, attempt, attempts, exc)
+                if attempt < attempts:
+                    time.sleep(2)
+        if banned:
+            # 限流/封禁是按出口 IP 记的；换到另一个出口继续请求等于绕过封禁，
+            # 会让服务端看到更多违规、把短封拖成长封。只有网络类故障才允许回退。
+            break
+    if required:
+        assert last_error is not None
+        raise last_error
+    if last_error is not None:
+        logging.error("合约域连接失败，暂停期内仅跑现货维度（合约三项记为缺失）: %s", last_error)
+    return None, None
+
+
+def exchange_from_env(cfg: Config) -> ccxt.binance:
+    return build_exchange(cfg, "spot")
+
+
+def futures_exchange(cfg: Config) -> ccxt.binance:
+    return build_exchange(cfg, "future")
+
+
+def okx_exchange(cfg: Config) -> ccxt.okx:
+    exchange = ccxt.okx({"enableRateLimit": True, "timeout": cfg.timeout_ms})
+    if cfg.proxy:
+        if cfg.proxy.lower().startswith("socks"):
+            exchange.socksProxy = cfg.proxy
+        else:
+            exchange.httpsProxy = cfg.proxy
+    return exchange
+
+
+def indicators(ohlcv: list[list[float]], cfg: Config) -> pd.DataFrame:
+    if not ohlcv:
+        return pd.DataFrame(columns=["ts", "open", "high", "low", "close", "volume",
+                                     "atr", "ema", "box_high", "box_low", "avg_volume"])
+    df = pd.DataFrame(ohlcv, columns=["ts", "open", "high", "low", "close", "volume"])
+    for column in ["ts", "open", "high", "low", "close", "volume"]:
+        df[column] = pd.to_numeric(df[column], errors="coerce")
+    df = df.dropna(subset=["ts", "open", "high", "low", "close", "volume"]).reset_index(drop=True)
+    prev_close = df["close"].shift(1)
+    true_range = pd.concat([
+        df["high"] - df["low"],
+        (df["high"] - prev_close).abs(),
+        (df["low"] - prev_close).abs(),
+    ], axis=1).max(axis=1)
+    df["atr"] = true_range.rolling(cfg.atr_period).mean()
+    df["ema"] = df["close"].ewm(span=cfg.ema_period, adjust=False).mean()
+    # Exclude the current candle: a signal is evaluated only after it closes.
+    df["box_high"] = df["high"].shift(1).rolling(cfg.box_period).max()
+    df["box_low"] = df["low"].shift(1).rolling(cfg.box_period).min()
+    df["avg_volume"] = df["volume"].shift(1).rolling(cfg.box_period).mean()
+    return df
+
+
+def signal(symbol: str, df: pd.DataFrame, cfg: Config) -> dict[str, Any] | None:
+    if len(df) < max(cfg.box_period, cfg.ema_period, cfg.atr_period) + 3:
+        return None
+    row = df.iloc[-2]  # last fully closed candle
+    required = ["box_high", "box_low", "avg_volume", "atr", "ema"]
+    if any(pd.isna(row[x]) for x in required):
+        return None
+    breakout = row.close > row.box_high
+    volume_ok = row.volume >= row.avg_volume * cfg.volume_multiplier
+    trend_ok = row.close > row.ema
+    if not (breakout and volume_ok and trend_ok):
+        return None
+    stop = max(row.close - cfg.stop_atr * row.atr, row.box_high * 0.995)
+    risk_per_unit = row.close - stop
+    if risk_per_unit <= 0:
+        return None
+    return {
+        "symbol": symbol,
+        "time": datetime.fromtimestamp(row.ts / 1000, tz=timezone.utc).isoformat(),
+        "entry": float(row.close),
+        "box_high": float(row.box_high),
+        "box_low": float(row.box_low),
+        "atr": float(row.atr),
+        "stop": float(stop),
+        "take_profit": float(row.close + cfg.reward_risk * risk_per_unit),
+        "volume_ratio": float(row.volume / row.avg_volume),
+    }
+
+
+def box_score(df: pd.DataFrame, cfg: Config) -> tuple[int, dict[str, float]]:
+    """K 线侧评分（权重见模块级 WEIGHTS）。
+
+    只有实测有区分度且样本外方向稳定的条件参与计分；其余条件仍写入
+    details 供展示，但不再计分。依据见 WEIGHTS 上方的实测说明。
+    """
+    if len(df) < 2:
+        return 0, {}
+    row = df.iloc[-2]
+    required = ["box_high", "box_low", "avg_volume", "atr", "ema", "close", "volume"]
+    if any(column not in df or pd.isna(row[column]) for column in required):
+        return 0, {}
+    score = 0
+    details: dict[str, float] = {}
+    width = (row.box_high - row.box_low) / row.close if row.close else 999
+    # 箱体宽 <=12% 实测区分度 +0.1pp（样本外 −17.8pp）：展示，不计分
+    details["box_width_pct"] = float(width * 100)
+    if row.close > row.box_high:
+        score += WEIGHTS["c_breakout"]
+        details["c_breakout"] = 1.0
+    if row.avg_volume:
+        ratio = float(row.volume / row.avg_volume)
+        # 量比 >=1.5 实测区分度 0.0pp：展示，不计分
+        details["volume_ratio"] = ratio
+        if ratio >= cfg.volume_multiplier:
+            details["vol_surge"] = 1.0
+    if row.close > row.ema:
+        score += WEIGHTS["c_trend"]
+        details["c_trend"] = 1.0
+    closed_volume = df["volume"].iloc[:-1]
+    if len(closed_volume) >= 12:
+        v0, v1 = float(closed_volume.iloc[-4:].sum()), float(closed_volume.iloc[-8:-4].sum())
+        # 4h 量增 / 量能三台阶实测区分度 +2.2pp / +2.6pp：展示，不计分
+        details["volume_4h_growth"] = v0 / v1 if v1 else 0.0
+    if len(closed_volume) >= 48:
+        v24 = float(closed_volume.iloc[-24:].sum())
+        prev24 = float(closed_volume.iloc[-48:-24].sum())
+        details["volume_24h_growth"] = v24 / prev24 if prev24 else 0.0
+        if v24 > prev24:
+            score += WEIGHTS["c_v24up"]
+            details["c_v24up"] = 1.0
+    return score, details
+
+
+def deriv_score(oi_chg_1d: float | None = None, oi_chg_3d: float | None = None,
+                ls_top: float | None = None,
+                ls_chg_3d: float | None = None) -> tuple[int, dict[str, float]]:
+    """合约侧评分：OI 增速 + 大户持仓多空比（权重见模块级 WEIGHTS）。
+
+    全部输入都是评估时点已经实现的历史量，不含任何未来数据。
+    这是项目原先完全缺失、而实测提升倍数最高的一个维度。
+    """
+    score = 0
+    details: dict[str, float] = {}
+
+    def finite(value: Any) -> bool:
+        return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+
+    if finite(oi_chg_1d):
+        details["oi_chg_1d"] = float(oi_chg_1d)
+        if oi_chg_1d >= OI_1D_THRESHOLD:
+            score += WEIGHTS["oi_chg_1d"]
+            details["hit_oi_1d"] = 1.0
+    if finite(oi_chg_3d):
+        details["oi_chg_3d"] = float(oi_chg_3d)
+        if oi_chg_3d >= OI_3D_THRESHOLD:
+            score += WEIGHTS["oi_chg_3d"]
+            details["hit_oi_3d"] = 1.0
+    if finite(ls_top):
+        details["ls_top"] = float(ls_top)
+        if ls_top < LS_TOP_THRESHOLD:
+            score += WEIGHTS["ls_top"]
+            details["hit_ls_top"] = 1.0
+    if finite(ls_chg_3d):
+        # 实测（大户口径）区分度 +1.5pp，属噪音：仅展示，不计分
+        details["ls_chg_3d"] = float(ls_chg_3d)
+    return score, details
+
+
+DERIV_PERIOD = "1h"
+DERIV_LOOKBACK = 200  # 1h × 200 ≈ 8.3 天，覆盖 3 日增速所需窗口
+DERIV_CACHE_BUCKET_MS = 3_600_000  # 数据是 1h 粒度：按小时对齐缓存，一小时内复用
+_DERIV_CACHE: dict[tuple[str, int], dict[str, Any]] = {}
+
+# /futures/data/* 是**独立额度**（2026-10-07 官方 legacy 文档核实）：
+#   openInterestHist / topLongShortPositionRatio / globalLongShortAccountRatio
+#   三个端点 Request Weight 均为 **0**（不占 /fapi/v1 的 2400 权重），
+#   但共享一条「IP rate limit 1000 requests/5min」。
+# ccxt 的 enableRateLimit 只保证 ≥50ms/请求，**完全不知道**这条规则。
+# 单轮扫描就要发约 2N 次（N≈218 → 436 次），5 分钟内跑 3 轮即超限 →
+# 429 →（若继续请求）418 封禁。这里按 60% 额度自限，给共享出口留余量。
+DATA_QUOTA_LIMIT = 600
+DATA_QUOTA_WINDOW_MS = 5 * 60_000
+
+
+def clear_deriv_cache() -> None:
+    _DERIV_CACHE.clear()
+
+
+def fetch_deriv_context(futures: ccxt.binance, symbol: str, cfg: Config,
+                        guard: "RequestGuard | None" = None) -> dict[str, Any]:
+    """拉取历史 OI 与大户持仓多空比，算出评估时点已知的增速。
+
+    数据源是币安公开的 /futures/data/* 接口，无需 API Key；该组接口只保留
+    最近 30 天，足够计算 1 日与 3 日变化。
+
+    口径与 research/05_deriv_features.py 对齐：
+      oi_chg_1d / oi_chg_3d  基于 sumOpenInterestValue，与 metrics 的
+                             sum_open_interest_value 同源
+      ls_top                 基于 topLongShortPositionRatio（大户持仓多空比），
+                             对应 metrics 的 sum_toptrader_long_short_ratio；
+                             该接口不可用时回退到 ccxt 的全市场账户比，并在
+                             ls_source 标注实际口径；**回退口径一律记为 partial**，
+                             防止另一种多空比冒充大户持仓口径（见 REASONING.md C4）
+
+    请求治理（2026-10-05）：
+      - 1h 粒度数据按小时对齐缓存（DERIV_CACHE=false 可关），只缓存状态 ok 的结果
+      - guard 传入时受分域暂停约束；暂停/失败不假装有数据，状态写在返回值里：
+        status ∈ ok / partial / failed / paused；as_of 为所用数据的观测时间戳
+    """
+    bucket = _now_ms() // DERIV_CACHE_BUCKET_MS
+    key = (symbol, bucket)
+    if cfg.deriv_cache:
+        cached = _DERIV_CACHE.get(key)
+        if cached is not None:
+            return cached
+    out = _fetch_deriv_context_live(futures, symbol, cfg, guard)
+    if cfg.deriv_cache and out.get("status") == "ok":
+        _DERIV_CACHE[key] = out
+    return out
+
+
+def _fetch_deriv_context_live(futures: ccxt.binance, symbol: str, cfg: Config,
+                              guard: "RequestGuard | None" = None) -> dict[str, Any]:
+    # ls_top 只允许「大户持仓比」口径（topLongShortPositionRatio，被回测验证）。
+    # 账户数比（全市场或大户账户）一律进 ls_global 仅作展示，不参与 ls_top 计分——
+    # 这是 REASONING.md C4 的既有语义（R2 落地，2026-10-07），不改权重与阈值。
+    # R3（2026-10-07）：ok 的定义收紧为「评分所需字段全部可计算」（oi_chg_1d/3d、
+    # ls_top），并保留**每个字段实际采用的数据时间**（oi_as_of/ls_as_of）与
+    # 「源数据里比采用点更新但不可用的尾部观测数」（oi/ls_stale_tail）——
+    # 合法零值、历史不足、接口失败、陈旧数据四者据此区分，不设统一时效阈值。
+    out: dict[str, Any] = {"oi_chg_1d": None, "oi_chg_3d": None,
+                           "ls_top": None, "ls_chg_3d": None, "ls_source": None,
+                           "ls_global": None,
+                           "oi_as_of": None, "ls_as_of": None,
+                           "oi_stale_tail": 0, "ls_stale_tail": 0,
+                           "status": "failed", "as_of": None}
+    market_id = futures.market(symbol)["id"]
+
+    def call(fn, *args, **kwargs):
+        if guard is None:
+            return fn(*args, **kwargs)
+        # /futures/data/* 与 /fapi/v1 权重无关，走独立的 1000/5min 额度：
+        # 额度用满先等到窗口重置，避免 429 之后继续请求升级成 418 封禁。
+        # reserve_data_request 自带跨进程锁，并在锁内**重读磁盘最新**后再判断/预约，
+        # 所以「读—查—预约—保存」对外是一个不可被其它实例插入的动作。
+        # 等待用分段睡眠，结束后回到循环顶部**重新检查暂停与额度**再决定是否放行。
+        egress = guard.key(FUTURES_DOMAIN)
+        while True:
+            if not guard.state.should_attempt(egress):
+                raise DomainPaused(f"{egress} 限流暂停中（至 {human_ts(guard.state.until(egress))}）")
+            delay = guard.state.reserve_data_request(egress)  # 自带跨进程锁 + 重读最新
+            if delay <= 0:
+                break
+            logging.warning("合约数据端点额度已用满，等待 %.0f 秒后继续", delay / 1000.0)
+            _sleep_interruptible(delay / 1000.0)
+        return guard.run(FUTURES_DOMAIN, fn, *args, **kwargs)
+
+    as_of = 0
+    ok_oi = ok_ls = False
+    try:
+        raw = call(futures.fapiDataGetOpenInterestHist,
+                   {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
+        series = [(_as_float(item.get("sumOpenInterestValue"), float("nan")),
+                   int(item.get("timestamp") or 0)) for item in raw]
+        raw_ts = [t for _, t in series if t]
+        series = [(v, t) for v, t in series if math.isfinite(v) and v > 0 and t]
+        if len(series) >= 25:
+            current_value, current_ts = series[-1]
+            has_1d = has_3d = False
+            for back_hours, key in ((24, "oi_chg_1d"), (72, "oi_chg_3d")):
+                cutoff = current_ts - back_hours * 3_600_000
+                past = [v for v, t in series if t <= cutoff]
+                if past and past[-1] > 0:
+                    out[key] = current_value / past[-1] - 1.0
+                    if key == "oi_chg_1d":
+                        has_1d = True
+                    else:
+                        has_3d = True
+            as_of = max(as_of, current_ts)
+            out["oi_as_of"] = current_ts
+            # 源数据里比采用点更新但不可用（零值/缺字段）的尾部观测数：合法零值
+            # 与数据缺口在此都呈现为"有更新观测却用不了"，保留事实，由上层标不完整
+            out["oi_stale_tail"] = sum(1 for t in raw_ts if t > current_ts)
+            # 1 日变化可算而 3 日不可算（历史不足）时，OI 侧不算取齐
+            ok_oi = has_1d and has_3d
+    except DomainPaused:
+        out["status"] = "paused"
+        return out
+    except _LIMIT_ERRORS:
+        # 429/418 已由 guard 登记成暂停：**不再继续后面的取数分支**，
+        # 否则会在刚被封的出口上接着请求，把短封拖成长封。
+        out["status"] = "paused"
+        return out
+    except Exception as exc:  # noqa: BLE001
+        logging.debug("OI history unavailable for %s: %s", symbol, exc)
+
+    try:
+        raw = call(futures.fapiDataGetTopLongShortPositionRatio,
+                   {"symbol": market_id, "period": DERIV_PERIOD, "limit": DERIV_LOOKBACK})
+        series = []
+        for item in raw:
+            ratio = _as_float(item.get("longShortRatio"), float("nan"))
+            if math.isfinite(ratio):
+                series.append((ratio, int(item.get("timestamp") or 0)))
+        raw_ls_ts = [int(item.get("timestamp") or 0) for item in raw]
+        raw_ls_ts = [t for t in raw_ls_ts if t]
+        if series:
+            out["ls_top"] = series[-1][0]
+            out["ls_source"] = "topLongShortPositionRatio"
+            cutoff = series[-1][1] - 72 * 3_600_000
+            past = [v for v, t in series if t and t <= cutoff]
+            if past:
+                out["ls_chg_3d"] = series[-1][0] - past[-1]
+            as_of = max(as_of, series[-1][1])
+            out["ls_as_of"] = series[-1][1]
+            out["ls_stale_tail"] = sum(1 for t in raw_ls_ts if t > series[-1][1])
+            ok_ls = True
+    except DomainPaused:
+        out["status"] = "paused"
+        return out
+    except _LIMIT_ERRORS:
+        out["status"] = "paused"
+        return out
+    except Exception as exc:  # noqa: BLE001
+        logging.debug("top position ratio unavailable for %s: %s", symbol, exc)
+        try:
+            raw = call(futures.fetch_long_short_ratio_history, symbol, DERIV_PERIOD,
+                       limit=DERIV_LOOKBACK)
+            series = [(float(item["longShortRatio"]), int(item.get("timestamp") or 0))
+                      for item in raw if item.get("longShortRatio") is not None]
+            if series:
+                # R2（2026-10-07）：回退口径是**全市场账户比**，不是大户持仓比——
+                # 只进 ls_global 展示，绝不写入 ls_top 参与计分（C4 语义）。
+                out["ls_global"] = series[-1][0]
+                out["ls_source"] = "globalLongShortAccountRatio(回退,仅展示)"
+                cutoff = series[-1][1] - 72 * 3_600_000
+                past = [v for v, t in series if t and t <= cutoff]
+                if past:
+                    out["ls_chg_3d"] = series[-1][0] - past[-1]
+                as_of = max(as_of, series[-1][1])
+                # 回退口径不把 ok_ls 置真——它不是被回测验证过的大户持仓口径
+        except DomainPaused:
+            out["status"] = "paused"
+            return out
+        except _LIMIT_ERRORS:
+            out["status"] = "paused"
+            return out
+        except Exception as exc2:  # noqa: BLE001
+            logging.debug("long/short ratio unavailable for %s: %s", symbol, exc2)
+
+    out["as_of"] = as_of or None
+    out["status"] = "ok" if (ok_oi and ok_ls) else ("partial" if (ok_oi or ok_ls) else "failed")
+    return out
+
+
+def caps_cache_path(cfg: Config) -> Path:
+    base_dir = Path(cfg.csv_dir) if cfg.csv_dir else Path(__file__).resolve().parent / "results"
+    return base_dir / "coingecko_caps.json"
+
+
+def coingecko_caps(cfg: Config, cache_path: Path | None = None) -> dict[str, float]:
+    """Best-effort public market caps keyed by uppercase ticker symbol.
+
+    市值一天变不了多少，而免费接口很容易 429：按天缓存到本地（默认
+    results/coingecko_caps.json），当天内的重复扫描不再消耗请求。缓存读取失败
+    时按无缓存处理（fail-open），重新联网获取。
+    """
+    path = Path(cache_path) if cache_path else caps_cache_path(cfg)
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    try:
+        if path.exists():
+            raw = json.loads(path.read_text(encoding="utf-8"))
+            if raw.get("date") == today and isinstance(raw.get("caps"), dict):
+                return {str(k): float(v) for k, v in raw["caps"].items()}
+    except Exception:
+        logging.warning("市值缓存读取失败，重新联网获取 %s", path, exc_info=True)
+    caps: dict[str, float] = {}
+    proxies = requests_proxies(cfg)
+    for page in range(1, 5):
+        response = requests.get(
+            "https://api.coingecko.com/api/v3/coins/markets",
+            params={"vs_currency": "usd", "order": "market_cap_desc", "per_page": 250,
+                    "page": page, "sparkline": "false"},
+            timeout=cfg.timeout_ms / 1000,
+            proxies=proxies,
+        )
+        response.raise_for_status()
+        for coin in response.json():
+            symbol = str(coin.get("symbol", "")).upper()
+            cap = coin.get("market_cap")
+            if symbol and cap:
+                # Symbol collisions exist; retaining the largest cap is conservative.
+                caps[symbol] = max(caps.get(symbol, 0), float(cap))
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({"date": today, "caps": caps}), encoding="utf-8")
+    except Exception:
+        logging.warning("市值缓存写入失败 %s", path, exc_info=True)
+    return caps
+
+
+def public_selection(exchange: ccxt.binance, futures: ccxt.binance | None, cfg: Config,
+                     okx: ccxt.okx | None = None,
+                     round_stats: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Rank Binance symbols with the programmable parts of the Chuanmu notes.
+
+    请求治理（2026-10-05）：现货域暂停时整轮跳过；合约域暂停/失败时现货照常出池，
+    合约数据按 deriv_status 标注（ok/partial/failed/paused/no_futures），不假装有数据。
+
+    R2 整轮摘要（2026-10-07）：调用方传入 `round_stats` dict 时，本轮覆盖范围、
+    合约数据完整性与候选有无写入其中；不传时行为与返回值与旧版完全一致。
+    摘要覆盖入选、落选、被跳过、失败的全部原定扫描对象，不从最终卡片反推。
+    """
+    stats = round_stats if round_stats is not None else {}
+    guard = RequestGuard(RateLimitState.load(default_state_path(cfg)), cfg)
+    spot_until = guard.state.until(guard.key(SPOT_DOMAIN))
+    if spot_until and _now_ms() < spot_until:
+        raise DomainPaused(f"现货域限流暂停中（至 {human_ts(spot_until)}），本轮跳过")
+    tickers = guard.run(SPOT_DOMAIN, exchange.fetch_tickers)
+    futures_tickers: dict[str, Any] = {}
+    domain_state = "no_client" if futures is None else "ok"
+    if futures is not None:
+        try:
+            futures_tickers = guard.run(FUTURES_DOMAIN, futures.fetch_tickers)
+        except DomainPaused:
+            logging.warning("合约域限流暂停中：本轮合约数据记为缺失，现货继续扫描")
+            domain_state = "paused"
+        except Exception as exc:
+            logging.warning("合约行情不可用，本轮按无合约数据处理: %s", exc)
+            domain_state = "failed"
+    okx_markets: dict[str, Any] = {}
+    okx_tickers: dict[str, Any] = {}
+    if okx is not None:
+        try:
+            okx_markets = okx.load_markets()
+            okx_tickers = okx.fetch_tickers()
+        except Exception as exc:
+            logging.warning("OKX data unavailable: %s", exc)
+    future_by_base: dict[str, str] = {}
+    if futures is not None:
+        future_by_base = {
+            market["base"]: symbol for symbol, market in futures.markets.items()
+            if market.get("swap") and market.get("linear") and market.get("quote") == "USDT"
+            and market.get("active", True)
+        }
+    caps: dict[str, float] = {}
+    if cfg.use_coingecko:
+        try:
+            caps = coingecko_caps(cfg)
+        except Exception as exc:
+            logging.warning("CoinGecko market caps unavailable: %s", exc)
+    rows: list[dict[str, Any]] = []
+    symbols = select_symbols(tickers, cfg, caps)
+    skipped_short_history = 0
+    skipped_short_history_symbols: list[str] = []
+    skipped_inactive = 0
+    skipped_inactive_symbols: list[str] = []
+    skipped_require_futures = 0
+    skipped_require_futures_symbols: list[str] = []
+    failed_symbols: list[str] = []
+    errors = 0
+    futures_expected = 0
+    futures_fetched_ok = 0
+    stale_rows = 0
+    oi_as_of_values: list[int] = []
+    ls_as_of_values: list[int] = []
+    deriv_counts = {"ok": 0, "partial": 0, "failed": 0, "paused": 0, "no_futures": 0}
+    logging.info("扫描范围 %d 个；成交额闸门 [%s, %s]；市值上限 %s；观察门槛 %d；%s",
+                 len(symbols), human_money(cfg.min_quote_volume),
+                 human_money(cfg.max_quote_volume), human_money(cfg.max_market_cap),
+                 cfg.min_score,
+                 "仅含合约标的" if cfg.require_futures else "包含仅现货标的")
+    for index, symbol in enumerate(symbols, 1):
+        if index == 1 or index % 10 == 0 or index == len(symbols):
+            logging.info("扫描进度 %d/%d: %s", index, len(symbols), symbol)
+        try:
+            market = exchange.market(symbol)
+            if market.get("active") is False or not market.get("spot", True):
+                # 覆盖对账（2026-10-08）：此分支原先静默 continue，导致
+                # scope_total 与 评分行+已计跳过 之间出现无解释差额。
+                # 只补记录，不改变"哪些币被跳过"。
+                skipped_inactive += 1
+                skipped_inactive_symbols.append(symbol)
+                continue
+            base = market["base"]
+            future_symbol = future_by_base.get(base)
+            if cfg.require_futures and not future_symbol:
+                skipped_require_futures += 1
+                skipped_require_futures_symbols.append(symbol)
+                continue
+            # 逐币 K 线是现货域请求：暂停时直接中止本轮（guard 不会触碰网络）
+            candles = guard.run(SPOT_DOMAIN, exchange.fetch_ohlcv,
+                                symbol, cfg.timeframe, limit=cfg.lookback)
+            df = indicators(candles, cfg)
+            if len(df) < cfg.box_period + 3:
+                skipped_short_history += 1
+                skipped_short_history_symbols.append(symbol)
+                continue
+            score, details = box_score(df, cfg)
+            kline_points = score
+            trade_levels = signal(symbol, df, cfg) or {}
+            ft = futures_tickers.get(future_symbol, {})
+            quote_volume = _as_float(tickers[symbol].get("quoteVolume"))
+            futures_volume = _as_float(ft.get("quoteVolume"))
+            cap = caps.get(base)
+            volume_cap_ratio = quote_volume / cap if cap else None
+
+            # —— 辅助加分（不计入门槛）——
+            # 市值 / OKX / 合约量 / OI市值比这几类条件在历史回测里缺数据、**未经验证**，
+            # 若混进 score 会让实盘门槛与回测门槛口径不一致（例如 BTC 仅凭"趋势+合约量+OKX"
+            # 就能凑到 7 分过门槛）。因此单独累计到 extra_score，只作展示与人工参考。
+            # 其中 OI 快照与资金费率要逐币请求且不计分（P0）：推迟到第二遍，只对
+            # 过门槛/展示行补取，其余行 extras_deferred=True 明确标注缺这块。
+            extra_score = 0
+            extra_hits: list[str] = []
+            if future_symbol and futures_volume >= quote_volume:
+                extra_score += 1
+                extra_hits.append("合约量>=现货量")
+            if cap and cap <= 50_000_000:
+                extra_score += 2
+                extra_hits.append("市值<=5000万")
+            elif cap and cap <= 100_000_000:
+                extra_score += 1
+                extra_hits.append("市值<=1亿")
+            if volume_cap_ratio and volume_cap_ratio >= 0.60:
+                extra_score += 2
+                extra_hits.append("成交量/市值>=60%")
+            okx_swap = any(
+                market.get("base") == base and market.get("quote") == "USDT"
+                and market.get("swap") and market.get("active", True)
+                for market in okx_markets.values()
+            )
+            if okx_swap:
+                extra_score += 1
+                extra_hits.append("币安+OKX合约")
+            # 合约侧：OI 增速 + 大户持仓多空比（实测提升倍数最高的一维）。
+            # 暂停/失败时 deriv_score 按缺项处理——缺失不是 0 分证据，状态单独标注。
+            deriv: dict[str, Any] = {}
+            deriv_status = "no_futures"
+            deriv_as_of = None
+            if future_symbol:
+                futures_expected += 1
+                try:
+                    deriv = fetch_deriv_context(futures, future_symbol, cfg, guard)
+                except DomainPaused:
+                    deriv = {"status": "paused"}
+                except Exception:
+                    logging.exception("deriv context failed for %s", future_symbol)
+                    deriv = {"status": "failed"}
+                deriv_status = str(deriv.get("status") or "ok")
+                deriv_as_of = deriv.get("as_of")
+                if deriv_status == "ok":
+                    futures_fetched_ok += 1
+                    if deriv.get("oi_as_of"):
+                        oi_as_of_values.append(int(deriv["oi_as_of"]))
+                    if deriv.get("ls_as_of"):
+                        ls_as_of_values.append(int(deriv["ls_as_of"]))
+                    # R3：字段都可计算，但源数据尾部存在"比采用点更新却不可用"的
+                    # 观测（合法零值或缺口）时，无法确认新鲜度 → 保留事实、标不完整
+                    if deriv.get("oi_stale_tail") or deriv.get("ls_stale_tail"):
+                        stale_rows += 1
+                if deriv_status == "paused" and domain_state == "ok":
+                    domain_state = "paused"
+            deriv_counts[deriv_status] = deriv_counts.get(deriv_status, 0) + 1
+            deriv_points, deriv_details = deriv_score(
+                deriv.get("oi_chg_1d"), deriv.get("oi_chg_3d"),
+                deriv.get("ls_top"), deriv.get("ls_chg_3d"))
+            score += deriv_points
+            details.update(deriv_details)
+            percentage = _as_float(tickers[symbol].get("percentage"), default=float("nan"))
+            okx_symbol = next((s for s, m in okx_markets.items()
+                               if m.get("base") == base and m.get("quote") == "USDT"
+                               and m.get("swap")), None)
+            okx_volume = _as_float(okx_tickers.get(okx_symbol, {}).get("quoteVolume")) if okx_symbol else 0.0
+            hit_conditions = []
+            if details.get("c_trend"): hit_conditions.append("收盘>EMA50")
+            if details.get("hit_oi_1d"): hit_conditions.append("OI 1日增>10%")
+            if details.get("hit_oi_3d"): hit_conditions.append("OI 3日增>20%")
+            if details.get("hit_ls_top"): hit_conditions.append("大户持仓多空比<1")
+            if details.get("c_breakout"): hit_conditions.append("突破箱体")
+            if details.get("c_v24up"): hit_conditions.append("24h量增")
+            if math.isfinite(percentage) and percentage > 0:
+                extra_hits.append("24h上涨")
+            rows.append({"symbol": symbol, "score": score, "max_score": MAX_SCORE,
+                         "score_kline": kline_points,
+                         "score_deriv": deriv_points if future_symbol else None,
+                         "deriv_status": deriv_status, "deriv_as_of": deriv_as_of,
+                         "has_futures": bool(future_symbol),
+                         "market_scope": "现货+合约" if future_symbol else "仅现货",
+                         "extra_score": extra_score,
+                         "_extra_hits": extra_hits,
+                         "_future_symbol": future_symbol,
+                         "conditions_met": len(hit_conditions),
+                         "conditions": ",".join(hit_conditions) or "无",
+                         "market_cap": cap,
+                         "spot_quote_volume": quote_volume, "futures_quote_volume": futures_volume,
+                         "okx_quote_volume": okx_volume, "volume_cap_ratio": volume_cap_ratio,
+                         "open_interest_value": None, "oi_cap_ratio": None,
+                         "funding_rate": None, "percentage_24h": percentage,
+                         "okx_contract": okx_swap, "ls_source": deriv.get("ls_source"),
+                         "ls_global": deriv.get("ls_global"),
+                         "oi_as_of": deriv.get("oi_as_of"), "ls_as_of": deriv.get("ls_as_of"),
+                         "oi_stale_tail": deriv.get("oi_stale_tail") or 0,
+                         "ls_stale_tail": deriv.get("ls_stale_tail") or 0,
+                         **details,
+                         "entry": trade_levels.get("entry"), "stop": trade_levels.get("stop"),
+                         "take_profit": trade_levels.get("take_profit"),
+                         "breakout": bool(df.iloc[-2].close > df.iloc[-2].box_high)})
+        except DomainPaused as exc:
+            logging.error("数据域处于限流暂停期，本轮扫描中止: %s", exc)
+            raise
+        except Exception:
+            errors += 1
+            failed_symbols.append(symbol)
+            logging.exception("failed scoring %s", symbol)
+    # 原先此处会给"24h 涨幅前十"的标的 +1 分。实测该项区分度 −0.0pp、提升倍数
+    # 0.99x（纯噪音，详见文件头 WEIGHTS 上方说明），本质是奖励"已经涨过的币"，已删除。
+    ranked = sorted(rows, key=lambda x: (x["score"], x["futures_quote_volume"]), reverse=True)
+    chosen = [x for x in ranked if x["score"] >= cfg.min_score]
+    shown = chosen or ranked[:10]
+    # —— 第二遍：OI 快照与资金费率只对展示行（过门槛，或无过门槛时的前 10）补取 ——
+    shown_symbols = {x["symbol"] for x in shown}
+    for row in rows:
+        future_symbol = row.pop("_future_symbol", None)
+        extra_hits = row.pop("_extra_hits")
+        row["extras_deferred"] = bool(future_symbol) and row["symbol"] not in shown_symbols
+        oi_value = None
+        funding_rate = None
+        if future_symbol and not row["extras_deferred"]:
+            try:
+                oi = guard.run(FUTURES_DOMAIN, futures.fetch_open_interest, future_symbol)
+                oi_value = _as_float(oi.get("openInterestValue"))
+                if not oi_value:
+                    ft = futures_tickers.get(future_symbol, {})
+                    oi_value = (_as_float(oi.get("openInterestAmount"))
+                                * _as_float(ft.get("last") or ft.get("close")))
+            except DomainPaused:
+                pass
+            except Exception:
+                logging.debug("open interest unavailable for %s", future_symbol, exc_info=True)
+            try:
+                funding = guard.run(FUTURES_DOMAIN, futures.fetch_funding_rate, future_symbol)
+                funding_rate = _as_float(funding.get("fundingRate"), default=float("nan"))
+                # 资金费率仅展示，不计分。
+            except DomainPaused:
+                pass
+            except Exception:
+                logging.debug("funding unavailable for %s", future_symbol, exc_info=True)
+        row["open_interest_value"] = oi_value
+        cap = row.get("market_cap")
+        row["oi_cap_ratio"] = (oi_value / cap) if (cap and oi_value) else None
+        if row["oi_cap_ratio"] and row["oi_cap_ratio"] >= 0.30:
+            row["extra_score"] += 1
+            extra_hits.append("OI/市值>=30%")
+        if row["oi_cap_ratio"] and row["oi_cap_ratio"] >= 1.0:
+            row["extra_score"] += 1
+            extra_hits.append("OI>=市值")
+        row["funding_rate"] = funding_rate
+        row["extra_conditions"] = ",".join(extra_hits) or "无"
+    # 注：这里**不再**做整表 save()。额度窗口的落盘已由 reserve_data_request 在
+    # 跨进程锁内逐次完成；整表回写会把本进程的陈旧副本盖回磁盘，抹掉其它进程
+    # 刚登记的预约（导致少算 → 重复放行），所以只保留逐次原子写入。
+    if round_stats is not None:
+        # R3：as_of_min = 各字段**实际采用时间**的最小值（跨字段、跨币），
+        # 不再是对"每币取过 max 的合并时间"取 min——那会掩盖同币内的字段时间差。
+        field_as_of_min = min(oi_as_of_values + ls_as_of_values) \
+            if (oi_as_of_values or ls_as_of_values) else None
+        round_stats.update({
+            "task_completed": True,          # 走到这里=未被 DomainPaused 中止
+            "scope_total": len(symbols),     # 原定扫描对象（含跳过/失败/落选）
+            # 覆盖对账（2026-10-08）：原定对象 = 评分行 + 各互斥跳过类 + 失败类；
+            # unclassified>0 表示存在未知去向类别，不得宣称全量对账。
+            "symbols_scope": list(symbols),
+            "skip_reasons": {
+                "inactive_or_non_spot": {"count": skipped_inactive,
+                                         "symbols": skipped_inactive_symbols},
+                "require_futures_missing": {"count": skipped_require_futures,
+                                            "symbols": skipped_require_futures_symbols},
+                "short_history": {"count": skipped_short_history,
+                                  "symbols": skipped_short_history_symbols},
+                "failed": {"count": errors, "symbols": failed_symbols},
+            },
+            "classified_total": (len(rows) + skipped_inactive + skipped_require_futures
+                                 + skipped_short_history + errors),
+            "unclassified": (len(symbols) - (len(rows) + skipped_inactive
+                                             + skipped_require_futures
+                                             + skipped_short_history + errors)),
+            "skipped_short_history": skipped_short_history,
+            "errors": errors,
+            "futures_expected": (None if futures is None else futures_expected),
+            "futures_fetched_ok": futures_fetched_ok,
+            "deriv_counts": deriv_counts,
+            "deriv_domain_state": domain_state,
+            "stale_rows": stale_rows,        # 字段可算但基点被尾部不可用观测顶旧的行数
+            "oi_as_of_min": min(oi_as_of_values) if oi_as_of_values else None,
+            "ls_as_of_min": min(ls_as_of_values) if ls_as_of_values else None,
+            "data_complete": (futures is not None
+                              and futures_fetched_ok == futures_expected
+                              and errors == 0 and domain_state == "ok"
+                              and stale_rows == 0),
+            "has_passing": bool(chosen),
+            "chosen_count": len(chosen),
+            "as_of_min": field_as_of_min,
+        })
+    return ranked
+
+
+def select_symbols(tickers: dict[str, Any], cfg: Config,
+                   caps: dict[str, float] | None = None) -> list[str]:
+    """挑出扫描范围：成交额落在 [下限, 上限] 内，且市值不超过硬闸门。
+
+    排序仍是按成交额降序，但**两端都设了闸门**，所以不再等价于"挑市值最大的
+    前 N 个"——那正是 BTC 能入选候选池的原因。市值取不到时不拦（fail-open），
+    避免 CoinGecko 抖动让池子忽大忽小。
+    """
+    caps = caps or {}
+    candidates = []
+    for symbol, ticker in tickers.items():
+        if not symbol.endswith("/USDT") or ":" in symbol:
+            continue
+        base = symbol.split("/")[0]
+        # Stablecoin pairs never form a tradable box; they only add noise.
+        if base in STABLECOINS:
+            continue
+        quote_volume = _as_float(ticker.get("quoteVolume"))
+        if not (cfg.min_quote_volume <= quote_volume <= cfg.max_quote_volume):
+            continue
+        cap = caps.get(base)
+        if cap and cfg.max_market_cap and cap > cfg.max_market_cap:
+            continue
+        candidates.append((symbol, float(quote_volume)))
+    candidates.sort(key=lambda item: item[1], reverse=True)
+    return [symbol for symbol, _ in candidates[: cfg.max_symbols]]
+
+
+def display_width(text: str) -> int:
+    """Terminal columns used by text, counting CJK glyphs as two."""
+    return sum(2 if unicodedata.east_asian_width(ch) in "WF" else 1 for ch in text)
+
+
+def pad(text: str, width: int, align: str = "left") -> str:
+    filler = " " * max(0, width - display_width(text))
+    return filler + text if align == "right" else text + filler
+
+
+def human_money(value: float | None) -> str:
+    if not value:
+        return "-"
+    for limit, suffix in ((1e12, "T"), (1e9, "B"), (1e6, "M"), (1e3, "K")):
+        if abs(value) >= limit:
+            return f"{value / limit:.2f}{suffix}"
+    return f"{value:.0f}"
+
+
+DERIV_STATUS_LABELS = {
+    "ok": "正常", "partial": "部分缺失", "failed": "获取失败",
+    "paused": "限流暂停", "no_futures": "无合约",
+}
+
+
+def deriv_status_label(row: dict[str, Any]) -> str:
+    if not row.get("has_futures"):
+        return "无合约"
+    return DERIV_STATUS_LABELS.get(str(row.get("deriv_status") or ""), "-")
+
+
+def render_table(rows: list[dict[str, Any]]) -> str:
+    """Format candidates as an aligned table for the launcher console."""
+    columns = [
+        ("标的", "symbol", "left", lambda r: r["symbol"].replace("/USDT", "")),
+        ("市场范围", "market_scope", "left", lambda r: r.get("market_scope", "-")),
+        ("合约数据", "deriv_status", "left", deriv_status_label),
+        ("评分", "score", "right", lambda r: f"{r['score']}/{r.get('max_score', MAX_SCORE)}"),
+        ("辅助", "extra_score", "right", lambda r: str(r.get("extra_score", 0))),
+        ("命中", "conditions_met", "right", lambda r: str(r.get("conditions_met", 0))),
+        ("趋势", "c_trend", "left", lambda r: "是" if r.get("c_trend") else "-"),
+        ("突破", "breakout", "left", lambda r: "是" if r.get("breakout", False) else "-"),
+        ("OI1日", "oi_chg_1d", "right",
+         lambda r: f"{r['oi_chg_1d'] * 100:+.0f}%" if r.get("oi_chg_1d") is not None else "-"),
+        ("OI3日", "oi_chg_3d", "right",
+         lambda r: f"{r['oi_chg_3d'] * 100:+.0f}%" if r.get("oi_chg_3d") is not None else "-"),
+        ("大户多空", "ls_top", "right",
+         lambda r: f"{r['ls_top']:.2f}" if r.get("ls_top") is not None else "-"),
+        ("箱体宽", "box_width_pct", "right", lambda r: f"{r.get('box_width_pct', 0):.1f}%"),
+        ("量比", "volume_ratio", "right",
+         lambda r: f"{r['volume_ratio']:.2f}" if r.get("volume_ratio") else "-"),
+        ("市值", "market_cap", "right", lambda r: human_money(r.get("market_cap"))),
+        ("现货量", "spot_quote_volume", "right", lambda r: human_money(r.get("spot_quote_volume"))),
+        ("合约量", "futures_quote_volume", "right",
+         lambda r: human_money(r.get("futures_quote_volume"))),
+        ("量/市值", "volume_cap_ratio", "right",
+         lambda r: f"{r['volume_cap_ratio']:.2f}" if r.get("volume_cap_ratio") else "-"),
+        ("OI/市值", "oi_cap_ratio", "right",
+         lambda r: f"{r['oi_cap_ratio']:.2f}" if r.get("oi_cap_ratio") else "-"),
+        ("入场", "entry", "right", lambda r: f"{r['entry']:.8g}" if r.get("entry") else "-"),
+        ("止损", "stop", "right", lambda r: f"{r['stop']:.8g}" if r.get("stop") else "-"),
+        ("止盈", "take_profit", "right",
+         lambda r: f"{r['take_profit']:.8g}" if r.get("take_profit") else "-"),
+    ]
+    table = [[header for header, _, _, _ in columns]]
+    table.extend([[fmt(row) for _, _, _, fmt in columns] for row in rows])
+    widths = [max(display_width(cell[i]) for cell in table) for i in range(len(columns))]
+    aligns = [align for _, _, align, _ in columns]
+    lines = ["  ".join(pad(c, widths[i], aligns[i]) for i, c in enumerate(table[0])),
+             "  ".join("-" * widths[i] for i in range(len(columns)))]
+    lines.extend("  ".join(pad(c, widths[i], aligns[i]) for i, c in enumerate(row))
+                 for row in table[1:])
+    return "\n".join(lines)
+
+
+def write_csv(rows: list[dict[str, Any]], out_dir: Path) -> Path:
+    """Persist one scan so past picks stay reviewable."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
+    path = out_dir / f"candidates-{stamp}.csv"
+    pd.DataFrame(rows).to_csv(path, index=False, encoding="utf-8-sig")
+    return path
+
+
+def run_once(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config) -> list[dict[str, Any]]:
+    okx = None
+    try:
+        okx = okx_exchange(cfg)
+    except Exception as exc:
+        logging.warning("OKX client unavailable: %s", exc)
+    ranked = public_selection(exchange, futures, cfg, okx)
+    chosen = [x for x in ranked if x["score"] >= cfg.min_score]
+    logging.info("ranked %d candidates; score >= %d: %d", len(ranked), cfg.min_score, len(chosen))
+    shown = chosen or ranked[:10]
+    if chosen:
+        print(f"\n=== 选出标的 {len(chosen)} 个（评分 >= {cfg.min_score}）===")
+    elif ranked:
+        print(f"\n=== 无标的达到评分 {cfg.min_score}，显示评分最高的前 {len(shown)} 个 ===")
+    if shown:
+        print(render_table(shown))
+        print("\n命中条件明细:")
+        for item in shown:
+            print(f"{item['symbol']}: 核心[{item.get('conditions', '无')}] "
+                  f"辅助[{item.get('extra_conditions', '无')}]")
+            print(f"Grok提示词: 请检索 {item['symbol'].replace('/USDT','')} 最近30天在 X/Twitter 的提及度、独立用户数、情绪变化、主要提及账号和事件驱动，并区分真实讨论与机器人刷屏；给出来源链接和结论。")
+    for item in chosen:
+        logging.debug("CANDIDATE %s", json.dumps(item, ensure_ascii=False))
+    if ranked and cfg.csv_dir:
+        try:
+            path = write_csv(ranked, Path(cfg.csv_dir))
+            print(f"\n完整评分已保存: {path}")
+        except Exception as exc:
+            logging.warning("could not write CSV: %s", exc)
+    return chosen
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Binance box breakout scanner")
+    parser.add_argument("--once", action="store_true", help="scan once and exit")
+    args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    cfg = env_config()
+    print("Binance 箱体突破选标的扫描器（只读公共数据，无下单路径）")
+    if cfg.proxy:
+        print(f"代理: {cfg.proxy}")
+    else:
+        print("未检测到代理。若币安被墙，请设置 BINANCE_PROXY，例如 http://127.0.0.1:7897")
+    print(f"参数: 周期={cfg.timeframe} 箱体={cfg.box_period} 扫描上限={cfg.max_symbols} "
+          f"门槛={cfg.min_score} 市值源={'CoinGecko' if cfg.use_coingecko else '关闭'}")
+    print(f"候选池闸门: 成交额 [{human_money(cfg.min_quote_volume)}, "
+          f"{human_money(cfg.max_quote_volume)}]  市值 <= {human_money(cfg.max_market_cap)}")
+    print("正在拉取行情，扫描期间会输出进度。\n")
+    try:
+        exchange, futures, cfg = connect_exchanges(cfg)
+    except Exception as exc:
+        print(f"\n连接币安失败: {type(exc).__name__}: {exc}")
+        log_path = Path(__file__).resolve().parent / "connection-error.log"
+        log_path.write_text(traceback.format_exc(), encoding="utf-8")
+        print(f"已尝试代理和直连。完整错误已保存到: {log_path}")
+        print("请确认代理软件已启动，并开启系统代理或 TUN 模式。")
+        return 1
+    if futures is None:
+        state = RateLimitState.load(default_state_path(cfg))
+        until = state.until(f"{FUTURES_DOMAIN}|{cfg.proxy or 'direct'}")
+        print("⚠ 合约数据当前不可用（连接失败或限流暂停"
+              + (f"至 {human_ts(until)}" if until else "") + "）：仅按现货量价评分，合约三项记为缺失。")
+    while True:
+        try:
+            run_once(exchange, futures, cfg)
+        except KeyboardInterrupt:
+            print("\n已手动停止。")
+            return 0
+        except Exception as exc:
+            print(f"\n本轮扫描失败: {type(exc).__name__}: {exc}")
+            if args.once:
+                return 1
+        if args.once:
+            return 0
+        print(f"\n{cfg.poll_seconds} 秒后重新扫描，Ctrl+C 停止。")
+        try:
+            time.sleep(cfg.poll_seconds)
+        except KeyboardInterrupt:
+            print("\n已手动停止。")
+            return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

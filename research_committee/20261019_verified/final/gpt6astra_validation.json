@@ -1,0 +1,122 @@
+{
+  "model_tag": "gpt6astra",
+  "checked_at": "2026-10-19T19:46:57.133307+08:00",
+  "scope": "最终文档结构、引用与受保护文件核对；不是策略实验或收益验证",
+  "result": "PASS",
+  "counts": {
+    "standard": 34,
+    "radical": 10,
+    "combinations": 10
+  },
+  "active_card_ids_unique": true,
+  "markdown_active_cards": 54,
+  "source_records": 33,
+  "source_reading_boundary": "33条是来源记录，包含有限阅读和访问失败，不代表33份完整原文",
+  "markdown_source_ids": 33,
+  "local_reference_paths_checked": 14,
+  "all_active_cards_pending_validation": true,
+  "protected_files_unchanged": 12,
+  "protected_files": [
+    {
+      "path": "binance_box_strategy.py",
+      "expected_sha256": "d1cc20d875a991b87b476aba9736fba449a9bd9351a20b17d0be16aa5ea80826",
+      "actual_sha256": "d1cc20d875a991b87b476aba9736fba449a9bd9351a20b17d0be16aa5ea80826",
+      "unchanged": true
+    },
+    {
+      "path": "ui/app.py",
+      "expected_sha256": "362125698c494065a04b0f0abbd9b80fe0d915a5ceb8fa18e4efcb042ca11eec",
+      "actual_sha256": "362125698c494065a04b0f0abbd9b80fe0d915a5ceb8fa18e4efcb042ca11eec",
+      "unchanged": true
+    },
+    {
+      "path": "research/02_detect_pumps.py",
+      "expected_sha256": "3e56a93e91f414aa2c05b1824695ca15e9d7db9c29f0de79143f1d630dba4a17",
+      "actual_sha256": "3e56a93e91f414aa2c05b1824695ca15e9d7db9c29f0de79143f1d630dba4a17",
+      "unchanged": true
+    },
+    {
+      "path": "research/03_build_features.py",
+      "expected_sha256": "46d8adcb197abe0a324a66ec8fd939cee5c76497f8edda4cbe983b6825ee5f89",
+      "actual_sha256": "46d8adcb197abe0a324a66ec8fd939cee5c76497f8edda4cbe983b6825ee5f89",
+      "unchanged": true
+    },
+    {
+      "path": "research/05_deriv_features.py",
+      "expected_sha256": "87ef0cb9cf25daa3c6a1e7d27e183dd6bca6a844e4c5c34baccbd61f4f5ffe9a",
+      "actual_sha256": "87ef0cb9cf25daa3c6a1e7d27e183dd6bca6a844e4c5c34baccbd61f4f5ffe9a",
+      "unchanged": true
+    },
+    {
+      "path": "research/07_oos_validate.py",
+      "expected_sha256": "88b53412dbbf2e14196b5da19506c5a2b3563c54f3683d49cdb0f05f7d6abdef",
+      "actual_sha256": "88b53412dbbf2e14196b5da19506c5a2b3563c54f3683d49cdb0f05f7d6abdef",
+      "unchanged": true
+    },
+    {
+      "path": "research/08_audit_hindsight.py",
+      "expected_sha256": "043cc8881d8c475495bf2a771b29fce3c1cd2efcc2020a5473e5c78fa25c3d43",
+      "actual_sha256": "043cc8881d8c475495bf2a771b29fce3c1cd2efcc2020a5473e5c78fa25c3d43",
+      "unchanged": true
+    },
+    {
+      "path": "research/09_backtest_revised.py",
+      "expected_sha256": "4f07d9df943a4d562586a2523fec4a246c38211b27cc23fd0deef52f3a490489",
+      "actual_sha256": "4f07d9df943a4d562586a2523fec4a246c38211b27cc23fd0deef52f3a490489",
+      "unchanged": true
+    },
+    {
+      "path": "research/11_hit_rate_current.py",
+      "expected_sha256": "22f307194273dc68967e6b2b8da5453f3edc0a602783d2eb829c5011fbed3755",
+      "actual_sha256": "22f307194273dc68967e6b2b8da5453f3edc0a602783d2eb829c5011fbed3755",
+      "unchanged": true
+    },
+    {
+      "path": "research/12_optimize_gate.py",
+      "expected_sha256": "c7a3cb9c7dae3829f6a6e6d5288d1845cbc89adb1b051ec298ca93b9eda16acf",
+      "actual_sha256": "c7a3cb9c7dae3829f6a6e6d5288d1845cbc89adb1b051ec298ca93b9eda16acf",
+      "unchanged": true
+    },
+    {
+      "path": "data/hit_rate_current.csv",
+      "expected_sha256": "5c711a1e56898519130582f2c655012164674b897cbf831fbc1205a09b8f92fd",
+      "actual_sha256": "5c711a1e56898519130582f2c655012164674b897cbf831fbc1205a09b8f92fd",
+      "unchanged": true
+    },
+    {
+      "path": "data/backtest_scores.csv",
+      "expected_sha256": "3c941a1a0c2fdf85957cccbf8b80af1ba5c6bfcb16810af5c355a0198054ebf0",
+      "actual_sha256": "3c941a1a0c2fdf85957cccbf8b80af1ba5c6bfcb16810af5c355a0198054ebf0",
+      "unchanged": true
+    }
+  ],
+  "artifact_snapshots": [
+    {
+      "path": "research_committee\\20261019_verified\\final\\gpt6astra_brainstorm.md",
+      "sha256": "126e40a3d280c0b4997fd9e56d6b3ca70954f5438a2a1645d16ad96d30927f78",
+      "bytes": 81218
+    },
+    {
+      "path": "research_committee\\20261019_verified\\final\\gpt6astra_hypotheses.json",
+      "sha256": "e849ce8165d1cbb198bcd476a1f229ed0e398738b3c819e1063b1973c27ab5cc",
+      "bytes": 66787
+    },
+    {
+      "path": "research_committee\\20261019_verified\\final\\gpt6astra_sources.json",
+      "sha256": "ce26ac559c4af9429482bd7819f0757951273d7457091453cb9949c076f88f17",
+      "bytes": 23514
+    }
+  ],
+  "errors": [],
+  "limitations": [
+    "未重新联网读取来源；本次检查只核对已存引用、状态与地址的一致性。",
+    "未运行新策略实验，没有新的收益结论。",
+    "未替代A1正式验收。"
+  ],
+  "reproduce": {
+    "shell": "PowerShell",
+    "working_directory": "D:\\Projects\\川沐十倍币筛选",
+    "command": "@'\nimport json,re,hashlib\nfrom pathlib import Path\nfrom collections import Counter\nfrom datetime import datetime,timezone,timedelta\nroot=Path.cwd()\nbase=root/'research_committee/20261019_verified'\nread=lambda p:json.loads(p.read_text(encoding='utf-8-sig'))\nh=read(base/'final/gpt6astra_hypotheses.json')\ns=read(base/'final/gpt6astra_sources.json')\na=read(base/'raw_output/gpt6astra_local_audit.json')\nm=(base/'final/gpt6astra_brainstorm.md').read_text(encoding='utf-8-sig')\nerrors=[]\nrequired_h=['id','title','group','kind','mechanism','challenge','project_relation','upside','data','discriminator','refute','failure_learning','status','model_tag']\nrequired_c=['id','title','origin','mechanism','non_additive','opposition','parents','discriminator','status','model_tag']\ncards=h['hypotheses']+h['combinations']\nids=[x['id'] for x in cards]\nif len(ids)!=len(set(ids)):errors.append('Duplicate active card IDs')\nkinds=Counter(x['kind'] for x in h['hypotheses'])\nactual_counts={'standard':kinds['standard'],'radical':kinds['radical'],'combinations':len(h['combinations'])}\nexpected_counts={'standard':34,'radical':10,'combinations':10}\nif actual_counts!=expected_counts or h['counts']!=actual_counts:errors.append('Count mismatch')\nfor collection,fields in [(h['hypotheses'],required_h),(h['combinations'],required_c)]:\n for x in collection:\n  for field in fields:\n   if not x.get(field):errors.append(x['id']+': missing '+field)\n  if x['status']!='待验证' or x['model_tag']!='gpt6astra':errors.append(x['id']+': status or model tag mismatch')\nfor x in h['hypotheses']:\n if not isinstance(x.get('evidence_ids'),list):errors.append(x['id']+': evidence_ids absent')\nsids=[x['id'] for x in s['sources']]\nif len(sids)!=len(set(sids)):errors.append('Duplicate source IDs')\nfor x in s['sources']:\n for field in ['id','title','url','author','published','accessed','status','supports','limits']:\n  if not x.get(field):errors.append(x['id']+': missing '+field)\n for row in [x]:\n  if not row['url'].startswith('https://'):errors.append(row['id']+': unexpected URL')\nfor x in h['hypotheses']:\n for sid in x.get('evidence_ids',[]):\n  if sid not in sids:errors.append(x['id']+': unresolved source '+sid)\nrefs=set(re.findall(r'\\[((?:AC|BF|DE|GH)\\d+)\\]',m))\ndefs=dict(re.findall(r'^\\[((?:AC|BF|DE|GH)\\d+)\\]:\\s+(\\S+)',m,re.M))\nfor sid in refs:\n if sid not in sids or sid not in defs:errors.append('Unresolved Markdown source '+sid)\nfor x in s['sources']:\n if defs.get(x['id'])!=x['url']:errors.append('Markdown/source URL mismatch '+x['id'])\nmd_ids=re.findall(r'^\\|\\s*\\*\\*(H\\d+)\\b',m,re.M)+re.findall(r'^#{2,4}\\s+([RC]\\d+)\\b',m,re.M)\nif Counter(md_ids)!=Counter(ids):errors.append('Markdown/card inventory mismatch')\nfor old,target in h['merged_aliases'].items():\n if old in ids:errors.append('Merged alias counted as active '+old)\n target_id=re.match(r'[HRC]\\d+',target)\n if not target_id or target_id.group(0) not in ids:errors.append('Unresolved merge target '+old)\nlocal_links=[]\nfor target in re.findall(r'\\]\\(([^)]+)\\)',m):\n if target.startswith(('https://','http://','#')):continue\n target=target.split('#')[0]\n target=re.sub(r':\\d+$','',target)\n p=Path(target)\n if not p.is_absolute():p=(base/'final'/p).resolve()\n local_links.append(str(p))\n if not p.is_file():errors.append('Missing local reference '+target)\nprotected=[]\nfor item in a['protected_files']:\n p=root/item['path']\n digest=hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else None\n ok=digest==item['sha256']\n protected.append({'path':item['path'],'expected_sha256':item['sha256'],'actual_sha256':digest,'unchanged':ok})\n if not ok:errors.append('Protected file differs '+item['path'])\nartifacts=[]\nfor name in ['gpt6astra_brainstorm.md','gpt6astra_hypotheses.json','gpt6astra_sources.json']:\n p=base/'final'/name\n artifacts.append({'path':str(p.relative_to(root)),'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size})\nresult={'model_tag':'gpt6astra','checked_at':datetime.now(timezone(timedelta(hours=8))).isoformat(),'scope':'最终文档结构、引用与受保护文件核对；不是策略实验或收益验证','result':'PASS' if not errors else 'FAIL','counts':actual_counts,'active_card_ids_unique':len(ids)==len(set(ids)),'markdown_active_cards':len(md_ids),'source_records':len(sids),'source_reading_boundary':'33条是来源记录，包含有限阅读和访问失败，不代表33份完整原文','markdown_source_ids':len(refs),'local_reference_paths_checked':len(local_links),'all_active_cards_pending_validation':all(x['status']=='待验证' for x in cards),'protected_files_unchanged':sum(x['unchanged'] for x in protected),'protected_files':protected,'artifact_snapshots':artifacts,'errors':errors,'limitations':['未重新联网读取来源；本次检查只核对已存引用、状态与地址的一致性。','未运行新策略实验，没有新的收益结论。','未替代A1正式验收。']}\nprint(json.dumps(result,ensure_ascii=False,indent=2))\n\n'@ | py -3.10 -X utf8 -B -"
+  }
+}
+

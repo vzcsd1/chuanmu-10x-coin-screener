@@ -30,17 +30,17 @@
 
 <!-- GLOSSARY:BEGIN 由 tools/glossary.py 自动生成，请勿手改 -->
 
-<!-- meta: version=4 updated=2026-10-05 共 76 条 -->
+<!-- meta: version=4 updated=2026-10-19 共 87 条 -->
 
-**共 76 条术语** · 更新于 2026-10-05 · 版本 4
+**共 87 条术语** · 更新于 2026-10-19 · 版本 4
 
 | 分类 | 条数 | 这一组在讲什么 |
 |---|---:|---|
-| 基础概念 | 11 | 币圈最底层的东西，先看懂这些才看得懂后面的 |
+| 基础概念 | 12 | 币圈最底层的东西，先看懂这些才看得懂后面的 |
 | 数据源 | 5 | 数据从哪来、免费还是收费、有什么坑 |
 | 指标 | 10 | 价格和持仓算出来的各种数值 |
 | 评分条件 | 9 | 真正决定一个币能不能进候选池的规则 |
-| 方法论 | 18 | 判断策略真假的方法，也是本项目最值钱的部分 |
+| 方法论 | 28 | 判断策略真假的方法，也是本项目最值钱的部分 |
 | 工程 | 18 | 写代码和跑程序会用到的概念 |
 | 风险 | 5 | 可能亏钱或让项目失败的事 |
 
@@ -155,6 +155,14 @@
 **在项目哪里**：`TODO.md C 段（交易所净流入）`
 
 > ⚠️ 追踪做市商动向成本最高，但可能最直接。
+
+### 流动性　`liquidity`
+
+**大白话**：在想买卖的时候，市场能否以接近当前报价成交所需数量。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 成交额高、曾出现高价，都不保证你需要退出时能卖出相同数量。
 
 
 ## 数据源
@@ -585,6 +593,86 @@
 **在项目哪里**：`TODO.md C 段`
 
 > ⚠️ 本项目目前没有这层过滤，risk-off 时照样输出一堆标的。
+
+### 反身性　`reflexivity`
+
+**大白话**：参与者的判断会改变行动，行动改变市场现实，现实又反过来改变判断。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 价格上涨与持仓一起增加，不能单独证明这条反馈链成立；本轮用于提出待验证机制。
+
+### 价格冲击　`price impact`
+
+**大白话**：一笔或一批买卖发生时，市场报价随之变化的程度。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 一起发生不等于全部由该笔交易造成；还要区分同时到来的消息和其他买卖。
+
+### 注意力预算　`attention budget`
+
+**大白话**：人每天实际能用于看币、核对资料和重新判断的时间与精力。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 名单短不等于省时；后台人工核实、重复提醒和中途换币都要计入。
+
+### 信息价值　`value of information`
+
+**大白话**：某条新资料能在多大程度上改变现在应该继续看、参与、等待或退出的判断。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 不能看到后来涨跌后才决定哪条资料最有价值；研究价值不等于盈利。
+
+### 阶段转换　`stage transition`
+
+**大白话**：依据当时新出现的证据，把一条机会从酝酿、启动、回撤等判断转到另一种判断。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 阶段不是市场保证会依次完成的流程；可以直接上涨、反复失败，也可以资料不足而无法判断。
+
+### 来源独立性　`source independence`
+
+**大白话**：看似多条证据是否分别来自不同的观察，还是都复制了同一条信息。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 多个账号、地址或模型赞同不自动构成多份独立证据；不能无凭据认定它们属于同一个人。
+
+### 价值归属　`value capture`
+
+**大白话**：一项业务或使用活动创造的好处，究竟通过什么规则到达持币者。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 产品成功、收入增长不自动意味着代币价值增长；需核实分配权或实际必要用途。
+
+### 活动时钟　`activity clock`
+
+**大白话**：按发生了多少买卖或其他市场活动划分观察阶段，而不总按固定分钟或小时划分。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 更频繁观察本身可能增加提醒负担；能否改善判断仍待验证。
+
+### 反事实比较　`counterfactual comparison`
+
+**大白话**：比较其他条件相同时，如果某个条件不同，结果可能有什么不同。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 历史中另一种结果未必能直接看到；假设不成立或资料不足时不能把模拟当事实。
+
+### 规则搜索　`rule search`
+
+**大白话**：让程序在事先限定的表达范围内提出和比较多条判断规则，并保留失败记录。
+
+**在项目哪里**：`research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）`
+
+> ⚠️ 多试几次后挑最好结果容易把运气当本领；提出规则和确认规则应分开，本轮不实施。
 
 
 ## 工程

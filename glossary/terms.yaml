@@ -22,7 +22,7 @@
 
 meta:
   version: 4
-  updated: 2026-10-05
+  updated: 2026-10-19
   note: 本文件是项目所有术语解释的唯一来源；任何文档需要术语解释时引用本文件，不要复制粘贴。
 
 terms:
@@ -719,3 +719,94 @@ terms:
     plain: 一轮返修里拆开的三块活。M0 = 来源身份与重复小时（把 713 个数据来源对清楚，同一个币同一个小时不能算两遍）；M1 = 排序读未来（修"打分时偷看还没收盘的K线"）；M2 = 后果与回撤（信号出现后价格怎么走、先跌多深，参考时刻和数据缺口怎么算）。
     where: tasks/a1_r3_followup_20261014.md 第 2/3/4 节
     caution: M 编号只在 r3 任务书体系内使用；后续轮次若重新拆块，编号含义以当时任务书为准，不能拿旧含义套新轮次。
+
+  # 2026-10-19 · gpt6astra：头脑风暴新增术语；定义真源，策略效用均待验证。
+
+  - id: reflexivity
+    zh: 反身性
+    en: reflexivity
+    cat: 方法论
+    plain: 参与者的判断会改变行动，行动改变市场现实，现实又反过来改变判断。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 价格上涨与持仓一起增加，不能单独证明这条反馈链成立；本轮用于提出待验证机制。
+
+  - id: liquidity
+    zh: 流动性
+    en: liquidity
+    cat: 基础概念
+    plain: 在想买卖的时候，市场能否以接近当前报价成交所需数量。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 成交额高、曾出现高价，都不保证你需要退出时能卖出相同数量。
+
+  - id: price_impact
+    zh: 价格冲击
+    en: price impact
+    cat: 方法论
+    plain: 一笔或一批买卖发生时，市场报价随之变化的程度。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 一起发生不等于全部由该笔交易造成；还要区分同时到来的消息和其他买卖。
+
+  - id: attention_budget
+    zh: 注意力预算
+    en: attention budget
+    cat: 方法论
+    plain: 人每天实际能用于看币、核对资料和重新判断的时间与精力。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 名单短不等于省时；后台人工核实、重复提醒和中途换币都要计入。
+
+  - id: information_value
+    zh: 信息价值
+    en: value of information
+    cat: 方法论
+    plain: 某条新资料能在多大程度上改变现在应该继续看、参与、等待或退出的判断。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 不能看到后来涨跌后才决定哪条资料最有价值；研究价值不等于盈利。
+
+  - id: stage_transition
+    zh: 阶段转换
+    en: stage transition
+    cat: 方法论
+    plain: 依据当时新出现的证据，把一条机会从酝酿、启动、回撤等判断转到另一种判断。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 阶段不是市场保证会依次完成的流程；可以直接上涨、反复失败，也可以资料不足而无法判断。
+
+  - id: source_independence
+    zh: 来源独立性
+    en: source independence
+    cat: 方法论
+    plain: 看似多条证据是否分别来自不同的观察，还是都复制了同一条信息。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 多个账号、地址或模型赞同不自动构成多份独立证据；不能无凭据认定它们属于同一个人。
+
+  - id: value_capture
+    zh: 价值归属
+    en: value capture
+    cat: 方法论
+    plain: 一项业务或使用活动创造的好处，究竟通过什么规则到达持币者。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 产品成功、收入增长不自动意味着代币价值增长；需核实分配权或实际必要用途。
+
+  - id: activity_clock
+    zh: 活动时钟
+    en: activity clock
+    cat: 方法论
+    plain: 按发生了多少买卖或其他市场活动划分观察阶段，而不总按固定分钟或小时划分。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 更频繁观察本身可能增加提醒负担；能否改善判断仍待验证。
+
+  - id: counterfactual
+    zh: 反事实比较
+    en: counterfactual comparison
+    cat: 方法论
+    plain: 比较其他条件相同时，如果某个条件不同，结果可能有什么不同。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 历史中另一种结果未必能直接看到；假设不成立或资料不足时不能把模拟当事实。
+
+  - id: rule_search
+    zh: 规则搜索
+    en: rule search
+    cat: 方法论
+    plain: 让程序在事先限定的表达范围内提出和比较多条判断规则，并保留失败记录。
+    where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
+    caution: 多试几次后挑最好结果容易把运气当本领；提出规则和确认规则应分开，本轮不实施。
+
