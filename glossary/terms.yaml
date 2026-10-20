@@ -21,8 +21,8 @@
 #   - 不确定的结论不要写成结论，写进 caution 并注明"待验证"
 
 meta:
-  version: 4
-  updated: 2026-10-19
+  version: 5
+  updated: 2026-10-20
   note: 本文件是项目所有术语解释的唯一来源；任何文档需要术语解释时引用本文件，不要复制粘贴。
 
 terms:
@@ -810,3 +810,140 @@ terms:
     where: research_committee/20261019_verified/final/gpt6astra_brainstorm.md（gpt6astra）
     caution: 多试几次后挑最好结果容易把运气当本领；提出规则和确认规则应分开，本轮不实施。
 
+
+  # ===== 2026-10-20 补充：A16–A18 实验产生的新概念（用户反馈"看不懂"）=====
+
+  - id: additive_score
+    zh: 加法积分制
+    en: additive scoring
+    cat: 评分条件
+    plain: 每个条件各给一个分，全部加起来，总分过线就入选。任何一项不合格都能被其他项的分数补上。
+    analogy: 像高考总分过线就能上——语文考 0 分，只要数学满分，照样录取。
+    where: binance_box_strategy.py 的 box_score() / deriv_score()
+    caution: **现行规则就是这一种，且没有任何否决项**。实测后果：`score>=5` 的池子占样本 69%，效果几乎等于"只要价格站上 50 日均线"。想表达"某一项必须成立"时，加法做不到，必须用否决制。
+
+  - id: veto
+    zh: 一票否决
+    en: veto / conjunctive gate
+    cat: 评分条件
+    plain: 规定某几项必须同时成立，只要有一项不成立就直接排除，不许用别的项补分。
+    analogy: 像驾照体检——视力不过关，其他项再好也不能发证。
+    where: 尚未实现；实验计划见 TODO.md 的 A20
+    caution: 初步试探显示否决制能提高命中率，但**7 天收益 4/4 下降**。它换的是"更纯的池子"，不是"更多的钱"。别默认它更好。
+
+  - id: rank_key
+    zh: 排序键
+    en: rank key
+    cat: 方法论
+    plain: 决定候选池里"先看谁"的那个数值。和"谁能进池"是两件不同的事。
+    analogy: 像面试——录取标准决定谁能进面试，排序键决定面试顺序。顺序错了，好人也排在后面。
+    where: binance_box_strategy.py 的 Config.rank_key
+    caution: **本项目踩过大坑**：一度用总分当排序键，结果分数最高的那批后面收益最差（4 个时间段全负）。2026-10-20 起改用"24 小时主动买占比"。分数仍用于决定谁能进池，只是不再决定顺序。
+
+  - id: ic
+    zh: 信息系数
+    en: IC (information coefficient)
+    cat: 方法论
+    plain: 某个数值和"后面实际涨了多少"的排名相关程度。+1 是完全同向，0 是毫无关系，−1 是完全反向。
+    analogy: 像考试前老师给的排名，和期末实际排名的吻合度。
+    where: research/14_variable_bench.py 的 _spearman()
+    caution: 0.05 就已经算有信息了，不要拿 0.8 当标准。**IC 超过 0.5 基本都是算错了**（本项目踩过两次：把答案混进了特征）。
+
+  - id: quantile_spread
+    zh: 分位价差
+    en: quantile spread (Q5 − pool)
+    cat: 方法论
+    plain: 按某个数值把候选池分成五档，看最高那档的实际收益中位数，比整个池子的中位数好多少。
+    analogy: 像看"班里前 20% 的平均分"比"全班平均分"高多少——只看平均顺序会漏掉"中间好两头差"的情况。
+    where: research/14_variable_bench.py 的 run_rankkey()
+    caution: **只看 IC 会被骗**。本项目有个排序键 IC 四段全正，但分位价差 0/4——因为池内是倒 U 形（最高分和最低分都不如中间）。分位价差才是决定性的。
+
+  - id: permutation_test
+    zh: 置换检验
+    en: permutation test
+    cat: 方法论
+    plain: 把某个数值随机打乱很多次，看真实结果比"随机情况"好多少，用来判断这个结果是不是运气。
+    analogy: 像把一副牌洗 200 次，看真手的牌力排在第几名。
+    where: research/14_variable_bench.py 的 permutation_band()
+    caution: 本项目的门槛是"真实值必须超过随机情况的 95% 分位"。池子越小，随机波动越大，门槛越难过。
+
+  - id: leakage
+    zh: 数据泄漏
+    en: data leakage
+    cat: 方法论
+    plain: 训练模型时不小心把"答案"也当成输入放了进去，导致结果好得不真实。
+    analogy: 像考试前把答案抄在草稿纸上带进考场——分数很高，但什么也没学会。
+    where: research/16_hier_model.py 的 LEAK / LEAK_PREFIX
+    caution: **本项目 2026-10-20 一天内踩了两次**：① 标签列改名后逃过了前缀排除，IC 飙到 0.94；② 用"峰值之后"的数据算出的指标被当成特征。判断方法：**结果好得不像真的，就先查泄漏**。
+
+  - id: tradability
+    zh: 可交易性
+    en: tradability
+    cat: 方法论
+    plain: 这个机会在真实操作里到底能不能吃到——买得进、拿得住、卖得掉。
+    analogy: 像看到一家店打折，但要先确认它开不开门、你排不排得上队、买完能不能拎走。
+    where: research/15_tradability.py
+    caution: 本项目实测 822 个翻倍事件里 **95.6% 都是可交易的**，"买不进"是假问题。真正的代价是"拿不住"——平均要先亏 24%、等 24 天才翻倍。
+
+  - id: fill_gap
+    zh: 启动跳空
+    en: entry gap (gap_t0)
+    cat: 指标
+    plain: 信号日收盘价，到启动日开盘价，中间跳了百分之几。跳得越多说明越买不进。
+    analogy: 像你看到特价消息，跑到店里发现价格已经涨回去了——差价就是跳空。
+    where: research/15_tradability.py 的 gap_t0
+    caution: 本项目实测中位数 **0.00%**、最大 1.45%。因为"信号日"被定义成起涨前一天，入场点天然在行情之前。**所以这个指标在当前标签里是空的**，换标签定义后才有用。
+
+  - id: keep_frac
+    zh: 峰后保留
+    en: keep fraction
+    cat: 指标
+    plain: 涨到最高点之后两天，价格还留着这波涨幅的百分之几。100% 表示一点没跌回去。
+    analogy: 像考试超常发挥考了 95 分，两天后补考还能考多少——考 90 分就是保留了九成。
+    where: research/15_tradability.py
+    caution: 本项目实测中位 **0.836**，说明样本里绝大多数是"涨上去就不下来"的慢牛，**不是插针**。这与"山寨币拉完就崩"的直觉相反。
+
+  - id: amplitude
+    zh: 幅度（爆多大）
+    en: amplitude
+    cat: 方法论
+    plain: 一个币如果真涨了，能涨多少倍。和"会不会涨"是两个不同的预测目标。
+    analogy: 像"这个人会不会被选进球队"和"他进队后能进几个球"——两个问题，两套判断标准。
+    where: research/16_hier_model.py
+    caution: **本项目的核心结构发现**：这两个目标在数据里**反向**——最像要涨的，涨了也涨得少。所以不能把两个判断加在一起，也不能相乘。
+
+  - id: identification_layer
+    zh: 识别层
+    en: identification layer
+    cat: 方法论
+    plain: 专门判断"这个币会不会涨"的那个模型或那一组条件。
+    analogy: 像球队的初选球探，只负责判断"这人够不够格进队"。
+    where: research/16_hier_model.py 的 p
+    caution: 本项目实测：识别层**很准**（AUC 0.67，和现行总分同级），但它对"涨多少"是 **4/4 反向**的。**"判断准"不等于"能用来排序"**——这是本项目最容易搞错的一点。
+
+  - id: amplitude_layer
+    zh: 幅度层
+    en: amplitude layer
+    cat: 方法论
+    plain: 专门判断"已经确定会涨的币，能涨多少"的那个模型。
+    analogy: 像球队的进攻教练，只负责判断"已经进队的人能进几个球"。
+    where: research/16_hier_model.py 的 a
+    caution: 本项目实测**4/4 有效**（IC +0.21~+0.36），但**只在"已确定会涨"的币里有效**。放进整个候选池就失效，因为池里四成根本不会涨，"能涨多少"对它们没有意义。
+
+  - id: hier_model
+    zh: 分层建模
+    en: hierarchical model
+    cat: 方法论
+    plain: 把"会不会涨"和"能涨多少"拆成两个模型分别训练，再想办法合起来用。
+    analogy: 像先由球探筛人、再由教练排兵——分工明确，但两个人的意见不能简单相乘。
+    where: research/16_hier_model.py
+    caution: **2026-10-20 实测：相乘失败**（4 个时间段 2 正 2 负）。原因是两个模型在池内负相关（后两段 −0.5~−0.6），相乘等于自毁。取反能修好平均顺序，但修不好尾部（倒 U 形）。
+
+  - id: objective
+    zh: 目标函数
+    en: objective function
+    cat: 方法论
+    plain: 你到底想让系统优化什么——是"翻倍的概率最高"，还是"单位时间赚得最多"。
+    analogy: 像招人：你要"最不可能离职的人"还是"业绩最高的人"，这两个标准挑出来的是两批人。
+    where: TODO.md 的 A20
+    caution: **本项目一直没定义清楚这件事**，而数据反复显示两个目标是反向的（命中率高的收益低）。不先选一个，后面所有实验都会在原地打转。
