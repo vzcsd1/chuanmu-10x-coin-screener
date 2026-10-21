@@ -155,6 +155,23 @@ class Config:
     #   （results/rate_limit_state.json），csv_dir 也为空则仅内存（测试用）。
     deriv_cache: bool = True
     rate_limit_state: str | None = None
+    # —— M04 杠杆超载否决（A21 拍板 2026-10-21，**默认关闭**）——
+    # 定义：oi_qv = OI 名义值 ÷ 24h 现货成交额。oi_qv 越大 = 相对现货的杠杆越重。
+    # 实测（research/24_m04_threshold_scan.py，四折、阈值只从训练段取）：
+    #   **只在「OI 可评估」的子集里比**（这一步是关键，见下），q=80% 阈值下
+    #   爆拉率 4/4 升（+4.25pp）、7 日净收益中位 4/4 升（+2.19pp）、均值去1 4/4 升（+3.36pp），
+    #   同时保留 83.1% 的爆拉事件。
+    # **为什么必须「只在可评估子集里比」**：oi_value 只覆盖 51.9%，而缺失 ⟺ 这个币没有
+    #   合约市场（实测 533/533 对齐 has_deriv=False），那批样本爆拉率 86.1%、有合约的只有 52.8%。
+    #   拿 gate 池去比整个池，会顺手剔掉爆拉率最高的一批，把「有没有合约」误读成「杠杆高低」。
+    #   A22 当年的「爆拉率 4/4 降」就是这么来的（构成效应），A27/A21 已更正。
+    # 缺失口径：默认 `pass`（fail-open，放行但打标）——无合约的币没有 OI 可算，
+    #   而它们恰恰是爆拉率最高的一批，剔除等于自断召回；与项目既有「CoinGecko 取不到市值不拦」一致。
+    m04_veto: bool = False
+    # 阈值：训练段 q80 的实测值（四折 4.00 / 3.61 / 3.29 / 3.24），取 3.2。
+    # 阈值越高越保守（留得越多）；q80 是「仍然 4/4 通过」的最保守点。
+    m04_veto_ref: float = 3.2
+    m04_veto_missing: str = "pass"
 
 
 def registry_proxy() -> str | None:
@@ -254,6 +271,9 @@ def env_config() -> Config:
         require_futures=os.getenv("REQUIRE_FUTURES", "false").lower() == "true",
         deriv_cache=os.getenv("DERIV_CACHE", "true").lower() == "true",
         rate_limit_state=os.getenv("RATE_LIMIT_STATE_FILE") or None,
+        m04_veto=os.getenv("M04_VETO", "false").lower() == "true",
+        m04_veto_ref=number("M04_VETO_REF", defaults.m04_veto_ref, float),
+        m04_veto_missing=(os.getenv("M04_VETO_MISSING") or defaults.m04_veto_missing).strip().lower(),
     )
 
 
@@ -1220,6 +1240,54 @@ def rank_rows(rows: list[dict[str, Any]], cfg: Config) -> list[dict[str, Any]]:
     return sorted(rows, key=lambda x: x["symbol"])
 
 
+def m04_veto_decision(row: dict[str, Any], cfg: Config) -> tuple[bool, str]:
+    """M04 杠杆超载否决（A21）。返回 (是否否决, 原因)。
+
+    规则：`oi_qv = OI 名义值 / 24h 现货成交额` 超过 `cfg.m04_veto_ref` 就否决。
+
+    三条设计取舍，都有实测依据（`research/24_m04_threshold_scan.py`）：
+
+    1. **只在 OI 可评估时否决**。`oi_value` 缺失 ⟺ 这个币没有合约市场，
+       而那批样本爆拉率 86.1%、有合约的只有 52.8%——**剔除它们等于自断召回**。
+       所以 `m04_veto_missing="pass"` 时一律放行，只打标不拦。
+    2. **阈值不在这里现算**。训练段分位在实盘拿不到，所以用固定常数
+       （q80 的实测值 3.2）；要改口径只改 `M04_VETO_REF`，不改代码。
+    3. **fail-open**。`oi_qv` 算不出来（OI 或成交额为 0/None）就放行——
+       与项目既有「CoinGecko 取不到市值不拦」一致。
+
+    否决是**减法**：它只会从 `chosen` 里拿掉行，不会加行。
+    """
+    oi = row.get("open_interest_value")
+    qv = row.get("spot_quote_volume")          # 与研究的 quote_vol_24h 同口径（现货 24h 成交额）
+    if not isinstance(oi, (int, float)) or not isinstance(qv, (int, float)) \
+            or not math.isfinite(oi) or not math.isfinite(qv) or qv <= 0 or oi <= 0:
+        if cfg.m04_veto_missing == "drop":
+            return True, "杠杆未知（OI 或成交额不可用）"
+        return False, ""
+    ratio = oi / qv
+    row["m04_oi_qv"] = ratio
+    if ratio > cfg.m04_veto_ref:
+        return True, f"杠杆超载 {ratio:.2f} > {cfg.m04_veto_ref:.2f}"
+    return False, ""
+
+
+def apply_m04_veto(chosen: list[dict[str, Any]], cfg: Config) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """对已过门槛的候选应用 M04 否决。返回 (留下的, 被否决的)。"""
+    if not cfg.m04_veto:
+        return chosen, []
+    kept, vetoed = [], []
+    for row in chosen:
+        hit, why = m04_veto_decision(row, cfg)
+        if hit:
+            vetoed.append({**row, "veto_reason": why})
+        else:
+            kept.append(row)
+    if vetoed:
+        logging.info("M04 否决 %d 个（阈值 %.2f）：%s", len(vetoed), cfg.m04_veto_ref,
+                     ", ".join(f"{x['symbol']}({x['veto_reason']})" for x in vetoed))
+    return kept, vetoed
+
+
 def rank_note(cfg: Config) -> str:
     return {
         "taker": "排序键 taker：24h 主动买占比（高→低）",
@@ -1662,7 +1730,14 @@ def run_once(exchange: ccxt.binance, futures: ccxt.binance, cfg: Config) -> list
     ranked = public_selection(exchange, futures, cfg, okx)
     chosen = [x for x in ranked if x["score"] >= cfg.min_score]
     logging.info("ranked %d candidates; score >= %d: %d", len(ranked), cfg.min_score, len(chosen))
+    # A21：M04 杠杆超载否决（默认关闭）。放在这里而不是 public_selection 里，
+    # 是因为 OI 只在「过门槛的展示行」才补取，此处才拿得到 open_interest_value。
+    chosen, vetoed = apply_m04_veto(chosen, cfg)
     shown = chosen or ranked[:10]
+    if cfg.m04_veto and vetoed:
+        print(f"\n--- M04 杠杆超载否决 {len(vetoed)} 个（阈值 {cfg.m04_veto_ref:.2f}）---")
+        for item in vetoed:
+            print(f"  {item['symbol']}: {item.get('veto_reason', '')}")
     if chosen:
         print(f"\n=== 选出标的 {len(chosen)} 个（评分 >= {cfg.min_score}）===")
     elif ranked:

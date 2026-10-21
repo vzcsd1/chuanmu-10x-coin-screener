@@ -2,7 +2,16 @@
   "version": 1,
   "updated": "2026-10-21",
   "note": "想法台账 = 所有「已经做出判决」的条目 + 判决理由 + 重启条件 + 判决变更史。待做事项不在这里（在 TODO.md），未测想法不在这里（在 变量清单_92机制可算性分级）。",
-  "status_vocab": ["未测", "在测", "候选", "采纳", "判死", "暂缓", "作废", "已完成"],
+  "status_vocab": [
+    "未测",
+    "在测",
+    "候选",
+    "采纳",
+    "判死",
+    "暂缓",
+    "作废",
+    "已完成"
+  ],
   "grade_vocab": {
     "无信息": "① 无条件无信息：AUC≈0.5，三个环境都测过",
     "同轴": "② 与现有变量同轴：有信息，但和已有变量携带同一个信息",
@@ -19,10 +28,20 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "分数最高的那批后续收益最差；把分数从排序里拿掉、改用 24h 主动买占比，四段全部转正",
-      "tested_by": ["A16"],
-      "evidence": ["research_committee/变量试验台_首轮实测_20261020.md"],
+      "tested_by": [
+        "A16"
+      ],
+      "evidence": [
+        "research_committee/变量试验台_首轮实测_20261020.md"
+      ],
       "last_review": "2026-10-20",
-      "history": [{"d": "2026-10-20", "e": "四段转正但很弱（+0.014~+0.074）", "n": "已采纳为排序键"}]
+      "history": [
+        {
+          "d": "2026-10-20",
+          "e": "四段转正但很弱（+0.014~+0.074）",
+          "n": "已采纳为排序键"
+        }
+      ]
     },
     {
       "id": "A17",
@@ -30,10 +49,20 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "95.6% 的翻倍事件可交易，跳空中位 0.00%；真问题是拿不住——路径回撤中位 −23.8%，上涨小时仅 51.4%",
-      "tested_by": ["A17"],
-      "evidence": ["research_committee/A17_可交易性清洗_20261020.md"],
+      "tested_by": [
+        "A17"
+      ],
+      "evidence": [
+        "research_committee/A17_可交易性清洗_20261020.md"
+      ],
       "last_review": "2026-10-20",
-      "history": [{"d": "2026-10-20", "e": "删掉「买不进」这个假瓶颈", "n": "M64/M70/M71/M72 一并测完"}]
+      "history": [
+        {
+          "d": "2026-10-20",
+          "e": "删掉「买不进」这个假瓶颈",
+          "n": "M64/M70/M71/M72 一并测完"
+        }
+      ]
     },
     {
       "id": "A18",
@@ -41,12 +70,22 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "识别层 P 很准但对幅度 4/4 负；幅度层 E 对幅度 4/4 正；两者相乘互相抵消",
-      "tested_by": ["A18"],
-      "evidence": ["research_committee/A18_分层建模_20261020.md"],
+      "tested_by": [
+        "A18"
+      ],
+      "evidence": [
+        "research_committee/A18_分层建模_20261020.md"
+      ],
       "why_stopped": "两个层方向相反，相乘=零；E 只能在「已确定会爆」的子集里用，而池内四成不会爆",
       "reopen_if": "A15 面板建好后，用于「同日 5 个候选先看哪个」的组内排序（现在每天只有 1–2 条，测不了）",
       "last_review": "2026-10-20",
-      "history": [{"d": "2026-10-20", "e": "相乘失败，但幅度层本身有效", "n": "拆开看一半是真的"}]
+      "history": [
+        {
+          "d": "2026-10-20",
+          "e": "相乘失败，但幅度层本身有效",
+          "n": "拆开看一半是真的"
+        }
+      ]
     },
     {
       "id": "A20",
@@ -54,12 +93,26 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "7 条四折可比、0 个帕累托改进；5 条一折都没跑出来；3 条折数不全",
-      "tested_by": ["A20", "A27"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv", "reports/death_audit_ds/gate_audit.csv"],
+      "tested_by": [
+        "A20",
+        "A27"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv",
+        "reports/death_audit_ds/gate_audit.csv"
+      ],
       "last_review": "2026-10-21",
       "history": [
-        {"d": "2026-10-20", "e": "报告写「15 条全测、0 个胜出」", "n": "当时没核对每条的可用折数"},
-        {"d": "2026-10-21", "e": "A27 自查：只有 7 条四折可比，5 条 0 折", "n": "改判 8 条为「测不动/折数不全」"}
+        {
+          "d": "2026-10-20",
+          "e": "报告写「15 条全测、0 个胜出」",
+          "n": "当时没核对每条的可用折数"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A27 自查：只有 7 条四折可比，5 条 0 折",
+          "n": "改判 8 条为「测不动/折数不全」"
+        }
       ]
     },
     {
@@ -68,10 +121,25 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "126 个变量合起来只消除 8.3% 不确定性；变量从 1 个加到 111 个，AUC 反跌 0.672→0.617",
-      "tested_by": ["A22"],
-      "evidence": ["research_committee/A22_比特尺与指标池天花板_20261020.md"],
+      "tested_by": [
+        "A22"
+      ],
+      "evidence": [
+        "research_committee/A22_比特尺与指标池天花板_20261020.md"
+      ],
       "last_review": "2026-10-20",
-      "history": [{"d": "2026-10-20", "e": "判死「加指标」这条路", "n": "同时补测 5 个一行代码机制"}]
+      "history": [
+        {
+          "d": "2026-10-20",
+          "e": "判死「加指标」这条路",
+          "n": "同时补测 5 个一行代码机制"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "M04 那一项的「爆拉率 4/4 降」被 A21 更正为构成效应（gate 池比整池，顺手剔掉了无合约的样本）",
+          "n": "比特尺本身的结论（加指标没空间）不受影响"
+        }
+      ]
     },
     {
       "id": "A24",
@@ -79,10 +147,20 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "真实基准率 0.1417%（822/580,104）；score>=5 真实爆拉率 0.245%；盈亏平衡要 6–13%",
-      "tested_by": ["A24"],
-      "evidence": ["research_committee/A24_爆拉定义与真实基准率_20261020.md"],
+      "tested_by": [
+        "A24"
+      ],
+      "evidence": [
+        "research_committee/A24_爆拉定义与真实基准率_20261020.md"
+      ],
       "last_review": "2026-10-20",
-      "history": [{"d": "2026-10-20", "e": "71% 是人造分母", "n": "所有「爆拉率提升」必须同时报真实口径"}]
+      "history": [
+        {
+          "d": "2026-10-20",
+          "e": "71% 是人造分母",
+          "n": "所有「爆拉率提升」必须同时报真实口径"
+        }
+      ]
     },
     {
       "id": "A25",
@@ -90,8 +168,12 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "现行策略基本是静态（18 分里 8 分是状态量）；动态特征单看 AUC 0.65 但 4 折 −0.015",
-      "tested_by": ["A25"],
-      "evidence": ["research_committee/A25_静态vs动态_20261020.md"],
+      "tested_by": [
+        "A25"
+      ],
+      "evidence": [
+        "research_committee/A25_静态vs动态_20261020.md"
+      ],
       "why_stopped": "分数 0–18 有界，「3 天涨 5 分」的前提是本来在高位，属换皮",
       "reopen_if": "换成不受有界性约束的跨币比较（A26）或跨币传染（M84）",
       "last_review": "2026-10-20"
@@ -102,26 +184,57 @@
       "kind": "实验",
       "status": "已完成",
       "claim": "8 条判死对象里 0 条是「无条件无信息」；判据随机通过率 7.5%、分辨力 ±3.5pp",
-      "tested_by": ["A27"],
-      "evidence": ["research_committee/A27_判死复核_20261021.md", "reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A27"
+      ],
+      "evidence": [
+        "research_committee/A27_判死复核_20261021.md",
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "last_review": "2026-10-21",
-      "history": [{"d": "2026-10-21", "e": "改判 M06/M09/M30 为暂缓；A20 的 8 条规则改判测不动", "n": "发现三种判死口径被混用"}]
+      "history": [
+        {
+          "d": "2026-10-21",
+          "e": "改判 M06/M09/M30 为暂缓；A20 的 8 条规则改判测不动",
+          "n": "发现三种判死口径被混用"
+        }
+      ]
     },
-
     {
       "id": "M04",
       "name": "杠杆超载（OI ÷ 现货成交额）",
       "kind": "机制",
-      "status": "候选",
+      "status": "采纳",
       "claim": "合约仓位相对现货成交额太大 = 杠杆推的行情，最脆；当否决用能删掉小赢、留下大赢",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv", "reports/bit_ceiling_ds/report.md"],
-      "why_stopped": "未落地：OI 与成交额同时有值的样本只有 52%，缺失口径未定；阈值只测了 67 分位一个点",
-      "reopen_if": "定了缺失口径（放行标记 / 不放行）+ 阈值敏感性扫描（50/60/67/75/80）后即可做代码开关",
+      "tested_by": [
+        "A22",
+        "A27",
+        "A21"
+      ],
+      "evidence": [
+        "research_committee/A21_M04落地_20261021.md",
+        "reports/m04_scan_ds/scan_honest.csv",
+        "reports/m04_scan_ds/missing_policy.csv"
+      ],
+      "why_stopped": null,
+      "reopen_if": "阈值应改为滚动分位（固定 3.2 相当于越来越松）；在 A15 面板上要做「杠杆 vs 现货很冷」的拆分检验；「当排序键」的用法未测（A22 测出 AUC 0.418 反向）",
       "last_review": "2026-10-21",
       "history": [
-        {"d": "2026-10-20", "e": "A22 测出 AUC 0.418（反向）、当否决 4/4 折均值升", "n": "唯一扛住稳健性的候选"},
-        {"d": "2026-10-21", "e": "A27 复核确认，并建议排除候选 A（过度延伸）", "n": "等 A21 拍板"}
+        {
+          "d": "2026-10-20",
+          "e": "A22 测出 AUC 0.418（反向）、当否决 4/4 折均值升",
+          "n": "唯一扛住稳健性的候选"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A27 复核确认，并建议排除候选 A（过度延伸）",
+          "n": "等 A21 拍板"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A21 重做检验：只在「OI 可评估」子集里比，四折 4/4 全赢（爆拉率 +4.25pp、7日中位 +2.19pp、捕获率 83.1%）",
+          "n": "改判采纳（默认关闭）；A22 的「爆拉率 4/4 降」是构成效应——缺失 OI 等价于无合约市场，那批爆拉率 86.1%"
+        }
       ]
     },
     {
@@ -131,14 +244,27 @@
       "status": "判死",
       "grade": "有害",
       "claim": "大户与散户多空意见分叉时，后面涨幅更差",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "与 ls_top 相关 0.56（换皮）；A27 进一步测出池内对 7 日收益 −0.255，是全项目最负的变量",
       "reopen_if": "作为「负向信号」（主动剔除）而不是正向指标时，值得单独测一次否决用法",
       "last_review": "2026-10-21",
       "history": [
-        {"d": "2026-10-20", "e": "A22 判「换皮」，理由是相关 0.56", "n": "当时只算了 AUC，没算收益相关"},
-        {"d": "2026-10-21", "e": "A27 复核：池内收益相关 −0.255，升级为「有害」", "n": "从「重复」升级为「该剔掉」"}
+        {
+          "d": "2026-10-20",
+          "e": "A22 判「换皮」，理由是相关 0.56",
+          "n": "当时只算了 AUC，没算收益相关"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A27 复核：池内收益相关 −0.255，升级为「有害」",
+          "n": "从「重复」升级为「该剔掉」"
+        }
       ]
     },
     {
@@ -148,14 +274,27 @@
       "status": "暂缓",
       "grade": "测不动",
       "claim": "负费率持续越久、越负，空头越拥挤，反弹越猛",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "三个环境 AUC 全在 0.478–0.502，但覆盖率只有 52%（资金费率数据不全）",
       "reopen_if": "补全资金费率历史后重测；或换「连续负费率天数」这种对缺失更鲁棒的表达",
       "last_review": "2026-10-21",
       "history": [
-        {"d": "2026-10-20", "e": "A22 判死（AUC 0.478）", "n": "未区分「无信息」与「测不准」"},
-        {"d": "2026-10-21", "e": "A27 改判暂缓：覆盖 52% 属测不动", "n": "判死成色③"}
+        {
+          "d": "2026-10-20",
+          "e": "A22 判死（AUC 0.478）",
+          "n": "未区分「无信息」与「测不准」"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A27 改判暂缓：覆盖 52% 属测不动",
+          "n": "判死成色③"
+        }
       ]
     },
     {
@@ -165,14 +304,27 @@
       "status": "暂缓",
       "grade": "弱信号",
       "claim": "笔数暴涨但每笔变小 = 散户涌入（要出货）；笔数涨、每笔也大 = 主力进场",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "A22 擦线未过（IC 0.053 < 噪声带 0.066）；A27 池内对收益 +0.086，但重开检验 2/4 折（低于随机 2.02）",
       "reopen_if": "换一种联合形式（现在是比值，可试符号一致性/二维分箱）；或等面板做大样本重测",
       "last_review": "2026-10-21",
       "history": [
-        {"d": "2026-10-20", "e": "A22 判「擦线未过」", "n": "擦线本身就是功效不足的信号"},
-        {"d": "2026-10-21", "e": "A27 改判暂缓：池内收益 +0.086 但重开 2/4 折", "n": "判死成色④"}
+        {
+          "d": "2026-10-20",
+          "e": "A22 判「擦线未过」",
+          "n": "擦线本身就是功效不足的信号"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A27 改判暂缓：池内收益 +0.086 但重开 2/4 折",
+          "n": "判死成色④"
+        }
       ]
     },
     {
@@ -182,8 +334,13 @@
       "status": "判死",
       "grade": "无信息",
       "claim": "单位成交额推动价格的幅度越大，盘口越薄，越容易被拉",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "全样本 0.492 / 池内 0.509 / 池外 0.504，三个环境全部≈0.5；仅 5 倍标签下 0.546",
       "reopen_if": "样本被「体量闸门」（成交额上下限）截断了尾部，若放开闸门重测可能不同——但这与策略前提冲突",
       "last_review": "2026-10-21"
@@ -195,14 +352,28 @@
       "status": "暂缓",
       "grade": "弱信号",
       "claim": "不看涨了多少，看涨的速度在不在加快",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv", "reports/death_audit_ds/reopen_test.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv",
+        "reports/death_audit_ds/reopen_test.csv"
+      ],
       "why_stopped": "与 score 相关 0.55（换皮）；A27 池内对收益 +0.129（约 4σ），但同折重开只有 2/4 折",
       "reopen_if": "找与 score 正交的表达形式（如对 score 回归取残差）；或在面板上用同日排序口径重测",
       "last_review": "2026-10-21",
       "history": [
-        {"d": "2026-10-20", "e": "A22 判「换皮」", "n": "换皮检验用的是爆拉标签"},
-        {"d": "2026-10-21", "e": "A27 发现池内收益 +0.129，但重开 2/4 折救不回来", "n": "改判暂缓，记录「裁判选错」这个教训"}
+        {
+          "d": "2026-10-20",
+          "e": "A22 判「换皮」",
+          "n": "换皮检验用的是爆拉标签"
+        },
+        {
+          "d": "2026-10-21",
+          "e": "A27 发现池内收益 +0.129，但重开 2/4 折救不回来",
+          "n": "改判暂缓，记录「裁判选错」这个教训"
+        }
       ]
     },
     {
@@ -212,8 +383,13 @@
       "status": "判死",
       "grade": "无信息",
       "claim": "在池子里待得越久，「即将爆拉」的概率越低，应按时间打折",
-      "tested_by": ["A25", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A25",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "池内 0.507 / 池外 0.517（两边都没有）；全样本 0.579 是辛普森悖论；池内对收益 −0.074",
       "last_review": "2026-10-21"
     },
@@ -224,8 +400,13 @@
       "status": "判死",
       "grade": "无信息",
       "claim": "沉寂 → 试探 → 主升，判断现在在第几幕比判断「会不会爆」更实用",
-      "tested_by": ["A25", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A25",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "池内 AUC 0.468（反号）：在池子里「刚翻上均线」反而更容易不爆（69.2% vs 76.0%）",
       "reopen_if": "方向性结论值得保留——「越确认的形态越容易小赢」，可用于「选小赢还是选大赢」的分流",
       "last_review": "2026-10-21"
@@ -237,20 +418,29 @@
       "status": "判死",
       "grade": "同轴",
       "claim": "累积小的偏离，超过阈值就报警，比单日阈值灵敏",
-      "tested_by": ["A25", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A25",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "全样本 0.680、池内 0.576（能分辨爆拉），但池内对收益 −0.088——按它排序会亏钱；与 score 相关 0.695",
       "last_review": "2026-10-21"
     },
-
     {
       "id": "rv_ratio_24_168",
       "name": "VCP 波动压缩比（M17 的变量）",
       "kind": "变量",
       "status": "候选",
       "claim": "24h 波动 / 7d 波动，越低说明压缩越紧",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "5 个候选里最强（pIC7 +0.123），但池内对收益 +0.129 与重开 3/4 折都只是「擦边」",
       "reopen_if": "面板上做同日排序；或与 M04 组合成「压缩 + 不过度杠杆」双条件",
       "last_review": "2026-10-21"
@@ -261,8 +451,13 @@
       "kind": "变量",
       "status": "候选",
       "claim": "成交额 ÷ 笔数，突变说明大钱进场",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "池外 AUC 0.468（现行策略盲区里没有信号），只有池内 0.581",
       "reopen_if": "换 4h 以外的窗口（现在只测了 4 根 1h）；或改成「大单占比」而不是均值",
       "last_review": "2026-10-21"
@@ -273,8 +468,13 @@
       "kind": "变量",
       "status": "候选",
       "claim": "主动买占比与收益的相关性，衡量「买的钱有没有推动价格」",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "**池外 AUC 0.590，是全部变量里最高的池外信号**，但池内只有 0.551，重开 3/4 折",
       "reopen_if": "**优先**：它是唯一在「现行策略盲区」里有真信号的变量 → 面板上做「池外专用规则」",
       "last_review": "2026-10-21"
@@ -285,8 +485,13 @@
       "kind": "变量",
       "status": "候选",
       "claim": "费率的绝对水平（不是变化）也有信息",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "覆盖只有 52%；池内 0.529 / 池外 0.550，弱但方向一致",
       "reopen_if": "补全费率历史后重测；与 M06（负费率弹簧）合并成一个更鲁棒的表达",
       "last_review": "2026-10-21"
@@ -297,13 +502,17 @@
       "kind": "变量",
       "status": "候选",
       "claim": "下影 − 上影，衡量「被拒绝的价格」在哪一侧",
-      "tested_by": ["A22", "A27"],
-      "evidence": ["reports/death_audit_ds/var_audit.csv"],
+      "tested_by": [
+        "A22",
+        "A27"
+      ],
+      "evidence": [
+        "reports/death_audit_ds/var_audit.csv"
+      ],
       "why_stopped": "5 个候选里最弱（pIC7 +0.066）；池外 0.497（盲区无信号）",
       "reopen_if": "改成「影线 / 实体」的比值；或只在 M23（试盘针 + 缩量死寂）的组合形态里用",
       "last_review": "2026-10-21"
     },
-
     {
       "id": "R01",
       "name": "入池规则：加法 ≥8",
@@ -311,8 +520,12 @@
       "status": "判死",
       "grade": "收益无改进",
       "claim": "把门槛从 5 抬到 8，池子收到 16%",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "四折可比，收益 −1.7pp、爆拉率 71.0%→67.0%，四折全负",
       "last_review": "2026-10-21"
     },
@@ -323,8 +536,12 @@
       "status": "判死",
       "grade": "收益无改进",
       "claim": "既然 5 分门槛≈站上均线，不如直接只用均线",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "四折可比，−0.5pp，池子 62%——与现行几乎等价，没有变好的理由",
       "last_review": "2026-10-21"
     },
@@ -335,8 +552,12 @@
       "status": "判死",
       "grade": "收益无改进",
       "claim": "不要求总分，只要多数条件满足",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "四折可比，中位 −1.0pp（均值 +2.2pp 但删一条就翻负）",
       "reopen_if": "均值口径下它赢（+2.2pp、p90 最高）——若目标函数改成「总账」而非「中位」，需重开",
       "last_review": "2026-10-21"
@@ -348,8 +569,12 @@
       "status": "判死",
       "grade": "收益无改进",
       "claim": "剔掉离均线太远的（已经涨过的）",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "四折可比，−1.6pp；池子收到 17% 但爆拉率也降到 49.1%",
       "last_review": "2026-10-21"
     },
@@ -360,8 +585,12 @@
       "status": "判死",
       "grade": "收益无改进",
       "claim": "同上但阈值放宽到 75 分位",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "四折可比，+0.5pp 但爆拉率 61.9%→58.1%，不满足「爆拉率不降」",
       "reopen_if": "**A20 唯一「收益不降」的一条**——若目标函数只认钱不认爆拉率，它值得重开",
       "last_review": "2026-10-21"
@@ -373,8 +602,12 @@
       "status": "判死",
       "grade": "收益无改进",
       "claim": "只要趋势 + 不追高",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "四折可比，−3.0pp（中位）/−5.8pp（均值），全项目最差的一条",
       "last_review": "2026-10-21"
     },
@@ -385,8 +618,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "极严门槛，池子只剩 4.7%",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "只有 1 折可用，与四折基线不可比",
       "reopen_if": "A15 面板建好后重测（A28）",
       "last_review": "2026-10-21"
@@ -398,8 +635,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "趋势 + 已突破，爆拉率最高（76.9%）",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "只有 2 折可用；且 90 分位 28.3% 最低（高胜率零大赢家）",
       "reopen_if": "A15 面板（A28）；但「零大赢家」这个性质四折一致，重开也要带着这个预期",
       "last_review": "2026-10-21"
@@ -411,8 +652,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "趋势 + 有人加杠杆",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "只有 2 折可用",
       "reopen_if": "A15 面板（A28）",
       "last_review": "2026-10-21"
@@ -424,8 +669,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "趋势 + 大户还在空",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "0 折——池子太小，一折都没跑出来",
       "reopen_if": "A15 面板（A28）",
       "last_review": "2026-10-21"
@@ -437,8 +686,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "突破 + 加杠杆",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "0 折",
       "reopen_if": "A15 面板（A28）",
       "last_review": "2026-10-21"
@@ -450,8 +703,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "三重条件全满足",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "0 折",
       "reopen_if": "A15 面板（A28）",
       "last_review": "2026-10-21"
@@ -463,8 +720,12 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "趋势 + 突破 + 大户还空",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "0 折",
       "reopen_if": "A15 面板（A28）",
       "last_review": "2026-10-21"
@@ -476,13 +737,16 @@
       "status": "暂缓",
       "grade": "没测",
       "claim": "多数条件满足的更严版本",
-      "tested_by": ["A20"],
-      "evidence": ["reports/veto_gate_ds/gate_summary.csv"],
+      "tested_by": [
+        "A20"
+      ],
+      "evidence": [
+        "reports/veto_gate_ds/gate_summary.csv"
+      ],
       "why_stopped": "0 折",
       "reopen_if": "A15 面板（A28）",
       "last_review": "2026-10-21"
     },
-
     {
       "id": "X01",
       "name": "只改 CTRL_C_EVENT 常量即可定向优雅停止",
@@ -490,7 +754,9 @@
       "status": "作废",
       "claim": "改一个常量就能优雅停止采集进程",
       "why_stopped": "信号有进程组限制；删锁必须先确认原进程退出",
-      "evidence": ["reports/full_archive_review.md"],
+      "evidence": [
+        "reports/full_archive_review.md"
+      ],
       "last_review": "2026-10-06"
     },
     {
@@ -500,7 +766,9 @@
       "status": "作废",
       "claim": "费率信号只是方向用错了，改过来就行",
       "why_stopped": "实测是噪音、样本外方向翻转——不是「用反了」，是「根本不该用」",
-      "evidence": ["KNOWLEDGE.md §6.1"],
+      "evidence": [
+        "KNOWLEDGE.md §6.1"
+      ],
       "reopen_if": "M06 / funding_mean_7d 在 A27 里仍是弱信号；若补全数据后重测有效，则「根本不该用」这个结论要改",
       "last_review": "2026-10-21"
     },
@@ -530,6 +798,52 @@
       "claim": "口径改了就直接重跑，省事",
       "why_stopped": "会覆盖现有样本和旧评分，丢失比较依据；替代方案是独立实验 + 独立结果路径",
       "last_review": "2026-10-06"
+    },
+    {
+      "id": "A21",
+      "name": "M04 落地：缺失口径 + 阈值扫描 + 代码开关",
+      "kind": "实验",
+      "status": "已完成",
+      "claim": "M04 当否决在「OI 可评估」子集里四折全赢；缺失 fail-open、阈值 q80=3.2；已做成默认关闭的开关",
+      "tested_by": [
+        "A21"
+      ],
+      "evidence": [
+        "research_committee/A21_M04落地_20261021.md",
+        "research/24_m04_threshold_scan.py",
+        "tests/test_m04_veto_ds.py"
+      ],
+      "last_review": "2026-10-21",
+      "history": [
+        {
+          "d": "2026-10-21",
+          "e": "排除候选 A（过度延伸，A27 重开 2/4 折）；采纳候选 B（M04）",
+          "n": "同时定了缺失口径与阈值"
+        }
+      ]
+    },
+    {
+      "id": "M69",
+      "name": "字段可得时点审计（发布延迟 / as-of / 前视）",
+      "kind": "实验",
+      "status": "已完成",
+      "claim": "归档全部 T+1（metrics 30.6–31.7h、K线 32–33.7h）；实盘 T+0（收盘后约 10 秒、桶不改写）；55 分钟前视换成安全口径后 AUC 0.604→0.603，不改结论",
+      "tested_by": [
+        "M69"
+      ],
+      "evidence": [
+        "research_committee/M69_字段可得时点审计_20261021.md",
+        "research/23_field_lag_audit.py"
+      ],
+      "reopen_if": "实盘 taker 多 5 分钟只测了一次一个币，要 3 币 × 3 时点复测；2026-08 之后归档行序打乱，A15 面板取数前必须先排序",
+      "last_review": "2026-10-21",
+      "history": [
+        {
+          "d": "2026-10-21",
+          "e": "三种实测全部完成；发现 2026-08 起归档行序打乱（末行不再等于 23:55）",
+          "n": "结论：地基干净，历史结论不作废"
+        }
+      ]
     }
   ]
 }
