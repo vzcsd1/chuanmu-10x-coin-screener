@@ -48,6 +48,14 @@ MET_COLS = ["sum_open_interest", "sum_open_interest_value",
 WINDOW_BACK = 10      # 评估日前 N 天
 WINDOW_FWD = 2
 
+# —— 取数时点（M69 审计后定，2026-10-21）——
+# 决策时刻 = `pre_day` 23:00 UTC（`03_build_features.py` 用 `iloc[-2]` 取 22:00 那根，
+# 它在 23:00 收盘；入场价就是 23:00 那根的 open）。
+# 所以**能安全使用的最后一根 5 分钟快照是 22:55**。原来取的是当天最后一根（23:55），
+# 比决策晚 55 分钟 = 前视。实测换成 22:55 后 `oi_chg_1d` 的 AUC 0.604→0.603，结论不变，
+# 但安全口径零成本，所以改掉（见 research_committee/M69_字段可得时点审计_20261021.md）。
+ASOF_HHMM = "22:55"
+
 
 def _get(url: str) -> bytes | None:
     try:
@@ -60,7 +68,7 @@ def _get(url: str) -> bytes | None:
 
 
 def _metrics_day(sym: str, day: str) -> dict | None:
-    """取某一天的紧凑摘要。"""
+    """取某一天的紧凑摘要（**只用决策时刻之前的数据**）。"""
     url = f"{CDN}/data/futures/um/daily/metrics/{sym}/{sym}-metrics-{day}.zip"
     blob = _get(url)
     if blob is None:
@@ -82,9 +90,24 @@ def _metrics_day(sym: str, day: str) -> dict | None:
             df[c] = pd.to_numeric(df[c], errors="coerce")
     if "sum_open_interest_value" not in df or df["sum_open_interest_value"].dropna().empty:
         return None
+
+    # ① 排序：归档文件**不保证按时间有序**（实测 2026-08 起行序被打乱）。
+    #    不排序时 `.iloc[-1]` 取到的是「文件里最后一行」= 当天随机时刻的快照。
+    if "create_time" in df:
+        df["create_time"] = pd.to_datetime(df["create_time"], errors="coerce")
+        df = df.dropna(subset=["create_time"]).sort_values("create_time").reset_index(drop=True)
+    if df.empty:
+        return None
+    full = df                                  # 全天（只用于 mean，不用于 last）
+    # ② 截到决策时刻之前（去掉 23:00–23:55 那 55 分钟的前视）
+    if "create_time" in df:
+        safe = df[df["create_time"].dt.strftime("%H:%M") <= ASOF_HHMM]
+        if not safe.empty:
+            df = safe
+
     out = {"symbol": sym, "day": day}
     out["oi_val_last"] = float(df["sum_open_interest_value"].dropna().iloc[-1])
-    out["oi_val_mean"] = float(df["sum_open_interest_value"].mean())
+    out["oi_val_mean"] = float(full["sum_open_interest_value"].mean())
     out["oi_amt_last"] = float(df["sum_open_interest"].dropna().iloc[-1]) if "sum_open_interest" in df else np.nan
     for c, tag in (("count_long_short_ratio", "ls_count"),
                    ("sum_toptrader_long_short_ratio", "ls_top"),

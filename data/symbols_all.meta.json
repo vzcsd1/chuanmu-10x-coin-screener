@@ -1,0 +1,12 @@
+{
+  "generated_at": "2026-10-21 10:38 UTC",
+  "count": 691,
+  "sources": {
+    "archive": 3745,
+    "local_1d": 642,
+    "local_1h": 396,
+    "pumps": 396
+  },
+  "s3_via": "proxy http://127.0.0.1:7897",
+  "filter_rules": "见 research/01_fetch_1d.py 的 LEVERAGED / STABLE"
+}

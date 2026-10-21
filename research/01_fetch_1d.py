@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import argparse
 import io
+import os
 import json
 import sys
 import time
@@ -59,11 +60,51 @@ try:
 except Exception:  # noqa: BLE001
     pass
 
+
+def _proxy() -> str | None:
+    """S3 列表接口在部分网络下直连不通（本机实测），必须走系统代理。
+
+    **顺序**：Windows 系统代理优先，其次环境变量——某些沙箱会往环境里塞一个
+    只对内部服务有效的 `HTTPS_PROXY`，对公网是死路。
+    下文件用的 `data.binance.vision` 直连可用，**不加代理**，否则白白变慢。
+    """
+    try:
+        import winreg
+        key = winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                             r"Software\Microsoft\Windows\CurrentVersion\Internet Settings")
+        if winreg.QueryValueEx(key, "ProxyEnable")[0]:
+            return "http://" + str(winreg.QueryValueEx(key, "ProxyServer")[0])
+    except Exception:  # noqa: BLE001
+        pass
+    for k in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy"):
+        v = os.getenv(k)
+        if v:
+            return v
+    return None
+
+
+# 只给 S3 列表用；CDN 下载仍走直连的 SESSION
+S3_SESSION = requests.Session()
+S3_SESSION.headers.update({"User-Agent": "chuanmu-research/0.1"})
+S3_SESSION.trust_env = False
+_PX = _proxy()
+if _PX:
+    S3_SESSION.proxies = {"http": _PX, "https": _PX}
+
 START_MONTH = "2022-06"   # 预留 6 个月做指标预热（EMA50/箱体24 都需要前置数据）
 
 
 def universe() -> list[str]:
-    src = Path(r"C:/Users/Administrator/Desktop/裸K盘感项目/data/symbols_all.txt")
+    """研究 universe 的**唯一来源**：仓库内 `data/symbols_all.txt`。
+
+    这个文件由 `tools/build_symbols_all.py` 生成（归档全量前缀 ∪ 本地已有 ∪ 爆拉币），
+    所以换一台机器也能算出同一份清单。**不要改回仓库外的绝对路径**——
+    那会让 pumps.json 不可复现（2026-10-20 就是栽在这上面）。
+    """
+    src = DATA / "symbols_all.txt"
+    if not src.exists():
+        raise SystemExit(
+            f"缺少 {src}。先跑：py -3.10 tools/build_symbols_all.py")
     syms = [l.strip() for l in src.read_text(encoding="utf-8").splitlines() if l.strip()]
     out = []
     for s in syms:
@@ -78,7 +119,7 @@ def universe() -> list[str]:
 def months_of(sym: str, interval: str = "1d") -> tuple[str, list[str]]:
     p = {"list-type": "2", "prefix": f"{KLINE}/{sym}/{interval}/", "max-keys": "1000"}
     try:
-        r = SESSION.get(S3, params=p, timeout=30)
+        r = S3_SESSION.get(S3, params=p, timeout=30)
         if r.status_code != 200:
             return sym, []
         root = ET.fromstring(r.text)

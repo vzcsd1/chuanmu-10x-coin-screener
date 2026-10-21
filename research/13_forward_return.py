@@ -11,8 +11,14 @@
 
 口径（写死在这里，不要在别处另立一套）
 ------------------------------------
-- 决策点：`pre_day` 22:00 收盘（`03_build_features.py` 用 `iloc[-2]` 取的就是这根）。
-- 入场价：`pre_day` 23:00 那根 K 线的 **open**（= 22:00 收盘价），即决策当下可成交的价格。
+**唯一决策时刻 = `pre_day` 23:00 UTC。** 三处取数都对齐到它：
+
+| 用什么 | 取到哪一根 | 为什么 |
+|---|---|---|
+| K 线特征 | `pre_day` 22:00 那根（22:00–23:00，**在 23:00 收盘**） | `03_build_features.py` 的 `iloc[-2]` |
+| 合约快照（OI/多空比/taker） | `pre_day` 22:55 那根 5 分钟快照 | `05_deriv_features.py` 的 `ASOF_HHMM`（M69 前视修正） |
+| 入场价 | `pre_day` 23:00 那根的 **open**（= 22:00 收盘价） | 决策当下可成交的价格 |
+
 - 出场价：入场时刻 + h 天，取「不晚于该时刻的最后一根已收盘 K 线」的 close。
 - `mfe_h` / `mae_h`：区间 (入场, 入场+h] 内的最高价 / 最低价 相对入场价的偏移。
 - 成本：默认 0.3% 双边（手续费 0.1%×2 + 滑点 0.1%），`ret_net = (1+ret)*(1-COST)-1`。
@@ -23,6 +29,14 @@
 爆拉占 58.6%。真实候选池里这个比例远低于此。所以：
 - 绝对收益是**上限**，不是策略收益；
 - **跨分数组的差值**才是可信信号（同分布内的比较）。
+
+**覆盖变更史（引用旧数字前必读）**
+2026-10-21 A14 把全池 1h 数据从 3,926 币月补到 19,796 币月，各持有期覆盖变成
+1/3/5/7 天 100%、14 天 99.7%、30 天 99.6%。在此之前 30 天只有 **26.4%**，
+而且**不是随机缺失**——旧覆盖里对照样本占 67%，池子本身只占 41%，
+所以当时报的「30 天中位 +3.83%」是**错的**（看起来「30 天比 7 天差」，纯属构成效应）。
+正确值 +35.4%。在共同子集上新旧数值**逐位相同**（最大差 0.0000pp、秩相关 1.000），
+说明计算逻辑没变，变的只是样本。
 """
 
 from __future__ import annotations
@@ -171,8 +185,8 @@ def _stats(s: pd.Series) -> dict:
         "win_rate": float(win.mean()),
         "p25": float(s.quantile(0.25)),
         "p75": float(s.quantile(0.75)),
-        # 亏损样本少于 3 个时盈亏比没有意义，置空
-        "payoff": float(gains / losses) if (losses > 1e-9 and int((~win).sum()) >= 3) else np.nan,
+        # 亏损样本少于 10 个时盈亏比没有意义（除以接近 0 会炸成 1e4 量级），置空
+        "payoff": float(gains / losses) if (losses > 1e-9 and int((~win).sum()) >= 10) else np.nan,
         "p_gt_50": float((s > 0.5).mean()),
         "p_lt_-20": float((s < -0.2).mean()),
     }
@@ -232,9 +246,12 @@ def _build_summary(out: pd.DataFrame, horizons, args, n_samples: int) -> list[st
             if not st["n"]:
                 continue
             flag = " ⚠️" if (h == 1 and off == 0 and title.startswith("二")) else ""
+            po = st["payoff"]
+            # payoff 可能是 nan（亏损样本不足）；也可能极大（几乎全胜），>50 一律显示为 >50
+            po_txt = "—" if po != po else (">50" if po > 50 else f"{po:.2f}")
             P(f"| {h} 天{flag} | {st['n']} | {st['median']:+.2%} | {st['mean']:+.2%} | "
               f"{st['win_rate']:.1%} | {st['p25']:+.2%} | {st['p75']:+.2%} | "
-              f"{(f'{st[chr(39)+chr(39)]}' if False else (f'{st[chr(112)+chr(97)+chr(121)+chr(111)+chr(102)+chr(102)]:.2f}' if st['payoff'] == st['payoff'] else '—'))} | "
+              f"{po_txt} | "
               f"{st['p_gt_50']:.1%} | {st['p_lt_-20']:.1%} |")
         P("")
 

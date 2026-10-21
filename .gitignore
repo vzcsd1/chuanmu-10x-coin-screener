@@ -1,6 +1,12 @@
 # 行情数据缓存：~208MB、3,800+ 个 parquet 二进制文件，
 # 代码与报告（Grok 阅读所需）不依赖它们入库；需要时可单独传输
-data/
+#
+# 但 `data/symbols_all.txt` 必须入库——它是**源输入**不是生成物：
+# A14 验收要求「换一台机器，用仓库内文件能跑出同样的 pumps.json」，
+# 清单不入库这条就直接不成立。所以忽略内容、放行清单。
+data/*
+!data/symbols_all.txt
+!data/symbols_all.meta.json
 
 # Python 运行产物
 __pycache__/
