@@ -21,8 +21,8 @@
 #   - 不确定的结论不要写成结论，写进 caution 并注明"待验证"
 
 meta:
-  version: 9
-  updated: 2026-10-20
+  version: 10
+  updated: 2026-10-21
   note: 本文件是项目所有术语解释的唯一来源；任何文档需要术语解释时引用本文件，不要复制粘贴。
 
 terms:
@@ -1104,3 +1104,30 @@ terms:
     analogy: 拿一把刻度是 3.5 厘米的尺子，去量两个人 2 厘米的身高差。量十次结果有正有负，你会得出「两人一样高」——但真相是你根本量不出来。
     where: KNOWLEDGE §2.19；reports/death_audit_ds/report.md §五
     caution: 本项目四折检验的分辨力：折内中位差 SD **1.76pp**，95% 带 **±3.5pp**。**要找的差距是 2pp，噪声比信号还大**——样本要放大约 **3 倍**（974 → 约 2,909 条）才能分辨。
+
+  - id: death_grade
+    zh: 判死成色
+    en: death grade
+    cat: 方法论
+    plain: 判一个想法「死刑」时，必须说清是哪一种死法——因为不同死法的可挽回程度完全不同。
+    analogy: 医生写死亡原因，写「心脏停跳」和写「没查出来」是两件事；后者不能算确诊，只能算还没查。
+    where: KNOWLEDGE §2.19、§2.20；research_ledger.json 的 grade 字段；TODO.md 研究推进方式第 5 条
+    caution: 七级：无信息 / 同轴 / 测不动 / 弱信号 / 没测 / 有害 / 收益无改进。**「测不动」「没测」「弱信号」不是判死，是暂缓**——它们说的是仪器不行或证据不够，不是这个想法不行。写「判死／测不动」是自相矛盾，`tools/ledger.py audit` 会拦。
+
+  - id: idea_ledger
+    zh: 想法台账
+    en: research ledger
+    cat: 工程
+    plain: 一张按「想法」而不是按「时间」排的清单，每条记着：做过没有、为什么停、什么条件能重开、判决改过几次。
+    analogy: 医院病历。同一个病人换科室看，新医生翻病历就知道以前查过什么、为什么没继续——不用病人自己记得。
+    where: research_ledger.json（数据源）；tools/ledger.py（check/trace/reopen/audit/stats/build）；research_committee/想法台账.md（生成物）
+    caution: 它只放**已经做出判决**的条目。待做在 TODO.md，没测没判的 92 个机制在变量清单——三者不互相替代。`想法台账.md` 是 `build` 出来的，手改会被覆盖。
+
+  - id: reopen_condition
+    zh: 重启条件
+    en: reopen condition
+    cat: 方法论
+    plain: 一个被判死或暂缓的想法，在什么情况下值得再测一次。写不出这一条，就等于把这个想法永久扔掉了。
+    analogy: 不是「这个方案不行」，而是「在现在这个预算下不行，预算翻三倍再试」——后者才是可执行的话。
+    where: research_ledger.json 的 reopen_if 字段；tools/ledger.py reopen 命令
+    caution: 现状：41 条里 16 条带重启条件。**这是「暂缓但不排除」能落地的唯一载体**——没有它，「暂缓」和「判死」在实践中没区别，因为没人会想起来重开。
